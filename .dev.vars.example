@@ -1,0 +1,4 @@
+# ローカル開発用。.dev.vars にコピーして使う(.dev.vars はGitに入らない)。
+# 本番では使わない。dev モードは localhost からのアクセスでしか有効にならない。
+AUTH_MODE=dev
+DEV_USER_EMAIL=dev@example.com
