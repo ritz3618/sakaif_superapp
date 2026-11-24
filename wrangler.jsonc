@@ -16,8 +16,8 @@
     {
       "binding": "DB",
       "database_name": "superapp",
-      // Cloudflareの画面でD1を作成したあと、そのID(秘密情報ではない)に置き換える。
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      // Cloudflareの画面で作成したD1のID(秘密情報ではない)
+      "database_id": "738fadcb-e745-4f28-8a9c-b93a3f998fa3"
     }
   ],
   // 定期実行の入口は1本だけ(5分おき)。各機能の処理は、ここから順に呼ぶ。
