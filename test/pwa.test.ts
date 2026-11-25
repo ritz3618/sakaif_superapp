@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { authenticate } from "../src/core/server/auth";
 import type { Env } from "../src/core/server/env";
 import { renderDefaultIcon } from "../src/core/server/png";
-import { buildManifest, headHtml, pwaTargets, targetForPath } from "../src/core/server/pwa";
+import { buildManifest, headHtml, pngDataUri, pwaTargets, targetForPath } from "../src/core/server/pwa";
 import { jstDate, jstStartOfDay, jstTime } from "../src/core/server/time";
 import { features } from "../src/features/registry";
 
@@ -15,13 +15,14 @@ describe("PWA(ホーム画面に追加)", () => {
   });
 
   it("機能の manifest は、start_url がその機能、scope は全体(/)", () => {
-    const manifest = buildManifest(targets.find((t) => t.id === "piyolog")!);
+    const manifest = buildManifest(targets.find((t) => t.id === "piyolog")!, "data:image/png;base64,AAAA");
     expect(manifest).toMatchObject({
       id: "/piyolog/",
       name: "ぴよログ",
       start_url: "/piyolog/?launch=piyolog",
       scope: "/",
       display: "standalone",
+      icons: [{ src: "data:image/png;base64,AAAA", sizes: "192x192", type: "image/png", purpose: "any" }],
     });
   });
 
@@ -33,11 +34,29 @@ describe("PWA(ホーム画面に追加)", () => {
     expect(targetForPath("/unknown/", targets).id).toBe("app");
   });
 
-  it("HTML の先頭に入れるタグは、Cookie 付きの manifest と apple-touch-icon を含み、名前をエスケープする", () => {
-    const html = headHtml({ id: "x1", name: '<a&"b>', shortName: "s", color: "#000000", path: "/x1/", isApp: false });
+  it("HTML の先頭に入れるタグは、Cookie 付きの manifest と、埋め込みの apple-touch-icon を含み、名前をエスケープする", () => {
+    const icon = pngDataUri(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    expect(icon).toBe("data:image/png;base64,iVBORw==");
+    const html = headHtml({ id: "x1", name: '<a&"b>', shortName: "s", color: "#000000", path: "/x1/", isApp: false }, icon);
     expect(html).toContain('<link rel="manifest" href="/pwa/x1/manifest.webmanifest" crossorigin="use-credentials">');
-    expect(html).toContain('<link rel="apple-touch-icon" href="/pwa/x1/icon-180.png">');
+    expect(html).toContain('<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw==">');
     expect(html).toContain("<title>&lt;a&amp;&quot;b&gt;</title>");
+  });
+
+  it("既定アイコンの円の縁は、背景色と白の中間の色になる", async () => {
+    const size = 192;
+    const png = await renderDefaultIcon(size, "#000000", "circle");
+    const view = new DataView(png.buffer, png.byteOffset);
+    const raw = inflateSync(png.slice(41, 41 + view.getUint32(33)));
+    const stride = size * 4 + 1;
+    const row = 96;
+    const values = Array.from({ length: size }, (_, x) => raw[row * stride + 1 + x * 4]!);
+    // 左端は背景(黒)、中央は白、その間に中間の値がある(なめらかな縁)
+    expect(values[0]).toBe(0);
+    expect(values[96]).toBe(255);
+    expect(values.some((v) => v > 0 && v < 255)).toBe(true);
+    // 左右対称
+    for (let x = 0; x < size; x++) expect(values[x]).toBe(values[size - 1 - x]);
   });
 
   it("既定アイコンは、正しい PNG(背景色と白い図形)になる", async () => {

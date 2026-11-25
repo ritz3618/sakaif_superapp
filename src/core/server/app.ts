@@ -18,6 +18,7 @@ import type {
 } from "../shared/api-types";
 import type { FeatureMeta } from "../shared/feature";
 import { featurePath } from "../shared/feature";
+import { canRegisterPush } from "../shared/push-policy";
 import { authenticate, getOrCreateUser } from "./auth";
 import { ensureMigrated, type Migration } from "./db/migrate";
 import { base64UrlToBytes } from "./encoding";
@@ -26,7 +27,17 @@ import type { FeatureServer } from "./feature-api";
 import { kvGet } from "./kv";
 import { notify } from "./notify";
 import { getVapidKeys, rememberAppOrigin, serviceName } from "./push/sender";
-import { buildManifest, ICON_SIZES, iconUrl, injectHead, loadIcon, pwaTargets, targetForPath, type IconSize } from "./pwa";
+import {
+  buildManifest,
+  ICON_SIZES,
+  iconUrl,
+  injectHead,
+  loadIcon,
+  pngDataUri,
+  pwaTargets,
+  targetForPath,
+  type IconSize,
+} from "./pwa";
 import { LAST_CRON_KEY } from "./scheduler";
 
 export interface RegisteredFeatureServer {
@@ -73,7 +84,8 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
     if (!target) return c.notFound();
     const file = c.req.param("file");
     if (file === "manifest.webmanifest") {
-      return new Response(JSON.stringify(buildManifest(target)), {
+      const manifest = buildManifest(target, pngDataUri(await loadIcon(c.env.DB, target, 192)));
+      return new Response(JSON.stringify(manifest), {
         headers: { "Content-Type": "application/manifest+json; charset=utf-8", "Cache-Control": "no-cache" },
       });
     }
@@ -153,7 +165,13 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
       endpoint?: string;
       keys?: { p256dh?: string; auth?: string };
       deviceLabel?: string;
+      appContext?: string;
     }>();
+    const context = body.appContext ?? "";
+    if (!canRegisterPush(context)) {
+      // 機能単体のアイコンからの登録を受け付けると、同じ通知が2通届くため
+      return c.json({ error: "通知は、本体のアイコンから開いて有効にしてください" }, 409);
+    }
     const endpoint = body.endpoint ?? "";
     const p256dh = body.keys?.p256dh ?? "";
     const auth = body.keys?.auth ?? "";
@@ -162,10 +180,11 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
     }
     const now = new Date().toISOString();
     await c.env.DB.prepare(
-      "INSERT INTO core_push_subscriptions (user_id, endpoint, p256dh, auth, device_label, user_agent, created_at) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, " +
+      "INSERT INTO core_push_subscriptions " +
+        "(user_id, endpoint, p256dh, auth, device_label, user_agent, app_context, created_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, " +
         "p256dh = excluded.p256dh, auth = excluded.auth, device_label = excluded.device_label, " +
-        "user_agent = excluded.user_agent, last_error = NULL",
+        "user_agent = excluded.user_agent, app_context = excluded.app_context, last_error = NULL",
     )
       .bind(
         user.id,
@@ -174,6 +193,7 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
         auth,
         (body.deviceLabel ?? "").slice(0, 40) || null,
         (c.req.header("user-agent") ?? "").slice(0, 300),
+        context,
         now,
       )
       .run();
@@ -195,7 +215,7 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
     const user = c.get("user");
     const { currentEndpoint } = await c.req.json<{ currentEndpoint?: string | null }>();
     const rows = await c.env.DB.prepare(
-      "SELECT id, endpoint, device_label, created_at, last_success_at, last_error " +
+      "SELECT id, endpoint, device_label, app_context, created_at, last_success_at, last_error " +
         "FROM core_push_subscriptions WHERE user_id = ? ORDER BY id",
     )
       .bind(user.id)
@@ -203,6 +223,7 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
         id: number;
         endpoint: string;
         device_label: string | null;
+        app_context: string | null;
         created_at: string;
         last_success_at: string | null;
         last_error: string | null;
@@ -212,6 +233,7 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
         id: r.id,
         service: serviceName(r.endpoint),
         deviceLabel: r.device_label,
+        appContext: r.app_context,
         createdAt: r.created_at,
         lastSuccessAt: r.last_success_at,
         lastError: r.last_error,
@@ -271,8 +293,12 @@ async function serveFrontend(c: AppContext, targets: ReturnType<typeof pwaTarget
   if (segments.length === 1 && !url.pathname.endsWith("/")) {
     return c.redirect(`${url.pathname}/${url.search}`, 301);
   }
-  const index = await c.env.ASSETS.fetch(new Request(new URL("/", url), { headers: c.req.raw.headers }));
-  return injectHead(index, targetForPath(url.pathname, targets));
+  const target = targetForPath(url.pathname, targets);
+  const [index, touchIcon] = await Promise.all([
+    c.env.ASSETS.fetch(new Request(new URL("/", url), { headers: c.req.raw.headers })),
+    loadIcon(c.env.DB, target, 180),
+  ]);
+  return injectHead(index, target, pngDataUri(touchIcon));
 }
 
 /** ページを開くリクエストか(スクリプトや画像の読み込みではないか)。 */

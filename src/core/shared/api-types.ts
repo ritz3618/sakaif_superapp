@@ -27,6 +27,8 @@ export interface PushSubscriptionInfo {
   /** 送信先サービスのホスト名だけ(URL全体は返さない) */
   service: string;
   deviceLabel: string | null;
+  /** 登録したときの開き方("app" または "browser"。古い登録は null) */
+  appContext: string | null;
   createdAt: string;
   lastSuccessAt: string | null;
   lastError: string | null;

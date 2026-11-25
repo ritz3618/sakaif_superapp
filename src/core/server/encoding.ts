@@ -1,9 +1,13 @@
 /** base64url とバイト列の変換など、小さな共通処理。 */
 
-export function bytesToBase64Url(bytes: Uint8Array): string {
+export function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(binary);
+}
+
+export function bytesToBase64Url(bytes: Uint8Array): string {
+  return bytesToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 export function base64UrlToBytes(text: string): Uint8Array<ArrayBuffer> {
