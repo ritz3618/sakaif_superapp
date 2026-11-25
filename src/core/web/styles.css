@@ -332,3 +332,259 @@ button:disabled {
   color: var(--muted);
   line-height: 1.8;
 }
+
+/* ---- 設定項目 ---- */
+.setting {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.setting:last-child {
+  border-bottom: none;
+}
+
+.setting__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.setting__label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.setting__inputs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.setting__inputs input[type="text"],
+.setting__inputs input[type="password"] {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.setting__message,
+.setting__status {
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+
+input[type="time"],
+input[type="date"],
+input[type="text"],
+input[type="password"] {
+  font: inherit;
+  font-size: 16px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.time-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.time-range__note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+button.button--small {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 52px;
+  height: 32px;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.switch__track {
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  background: var(--border);
+  transition: background 0.15s;
+  pointer-events: none;
+}
+
+.switch__track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s;
+}
+
+.switch input:checked + .switch__track {
+  background: #34c759;
+}
+
+.switch input:checked + .switch__track::after {
+  transform: translateX(20px);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* ---- 一覧 ---- */
+.history-list,
+.link-list,
+.icon-list,
+.order-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.history-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.history-list__meta {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.badge--danger {
+  background: var(--danger);
+}
+
+.link-list li {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.link-list li:last-child,
+.icon-list li:last-child,
+.order-list li:last-child {
+  border-bottom: none;
+}
+
+.link-list a {
+  font-size: 16px;
+  font-weight: 600;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.icon-list li,
+.order-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.icon-list img,
+.order-list img {
+  border-radius: 22%;
+  flex-shrink: 0;
+}
+
+.icon-list__name,
+.order-list__name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 15px;
+}
+
+.icon-list__name .note {
+  margin: 0;
+}
+
+.icon-list__buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ---- アイコンの切り抜き ---- */
+.icon-editor h3 {
+  margin-top: 0;
+}
+
+.icon-editor__view {
+  display: block;
+  margin: 8px auto;
+  border-radius: 22%;
+  background: var(--bg);
+  touch-action: none;
+  cursor: grab;
+}
+
+.icon-editor__zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.icon-editor__zoom input {
+  flex: 1;
+}
+
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.file-button input {
+  display: none;
+}

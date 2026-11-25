@@ -30,6 +30,12 @@ test/                  単体テストと、境界ルールの検査
 
 1. `src/features/<フォルダ名>/feature.ts` に、`defineFeature({ id, name, kind, color, order })` を書く。これだけでホームに並ぶ。
 2. 必要なら `server.ts`(`defineFeatureServer`)、`web.tsx`(画面)、`migrations/0001_*.sql` を足す。
+   - 設定: `feature.ts` の `settings` に項目を宣言すると、設定画面に自動で出る。
+     種類は `boolean` / `minutes` / `timeRanges` / `date` / `text` / `secret`(秘密の値は画面に表示されない)。
+     保存先は `scope: "shared"`(夫婦共通)か `"user"`(ユーザーごと)。サーバー側では `ctx.settings.get(key, userId?)` で読む。
+   - 通知: `feature.ts` の `notifications` に種類を宣言し、定期実行の中で `ctx.notify({ type, to, dedupeKey, title, body, url })` を呼ぶ。
+     オン/オフ、通知を避ける時間帯(明けたときに送る)、重複防止(`dedupeKey` が同じなら1回だけ)、履歴は共通部分が処理する。
+   - 定期実行: `scheduled.run` が例外を投げると失敗として数え、続けて失敗したら全員にエラー通知を送る(各自オフにできる)。
 3. 守ること(`npm test` で自動検査):
    - 機能は、ほかの機能を読み込まない。core からは `core/shared/*` と `feature-api.ts` だけを使う。
    - D1 のテーブル名は `<フォルダ名>_` で始める。共通部分は `core_`。

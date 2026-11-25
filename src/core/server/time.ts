@@ -21,6 +21,12 @@ export function jstStartOfDay(at: Date): Date {
   return new Date(Date.parse(`${day}T00:00:00Z`) - JST_OFFSET_MS);
 }
 
+/** 日本時間の 0時からの分(0〜1439) */
+export function jstMinuteOfDay(at: Date): number {
+  const shifted = new Date(at.getTime() + JST_OFFSET_MS);
+  return shifted.getUTCHours() * 60 + shifted.getUTCMinutes();
+}
+
 /** 日本時間の HH:MM */
 export function jstTime(at: Date): string {
   return new Date(at.getTime() + JST_OFFSET_MS).toISOString().slice(11, 16);

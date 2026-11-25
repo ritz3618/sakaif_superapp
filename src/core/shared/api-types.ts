@@ -43,7 +43,52 @@ export interface PushTestResult {
   details: { service: string; status: number | null; error?: string }[];
 }
 
+export interface JobStatus {
+  featureId: string;
+  featureName: string;
+  consecutiveFailures: number;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastError: string | null;
+}
+
 export interface StatusResponse {
   lastCronAt: string | null;
   serverTime: string;
+  jobs: JobStatus[];
+}
+
+export interface NotificationHistoryItem {
+  id: number;
+  featureName: string;
+  type: string;
+  title: string;
+  body: string;
+  /** "sent"(届けた)または "failed"(すべての端末で失敗) */
+  status: string;
+  sentCount: number;
+  createdAt: string;
+}
+
+export interface HomeOrderItem {
+  id: string;
+  name: string;
+  iconUrl: string;
+}
+
+export interface IconTargetInfo {
+  id: string;
+  name: string;
+  /** "app" は本体 */
+  isApp: boolean;
+  iconUrl: string;
+  /** "upload"(登録した画像)または "default"(既定のアイコン) */
+  source: "upload" | "default";
+}
+
+export interface IconUploadRequest {
+  /** 180×180 の PNG(base64) */
+  png180: string;
+  /** 192×192 の PNG(base64) */
+  png192: string;
 }

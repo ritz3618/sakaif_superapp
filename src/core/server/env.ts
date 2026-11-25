@@ -21,5 +21,9 @@ export interface User {
 /** Hono に渡す型 */
 export interface AppBindings {
   Bindings: Env;
-  Variables: { user: User };
+  Variables: {
+    user: User;
+    /** 機能のAPI(/api/f/<機能ID>/...)の中だけで使う。feature-api の featureContext(c) で取り出す。 */
+    featureContext: unknown;
+  };
 }
