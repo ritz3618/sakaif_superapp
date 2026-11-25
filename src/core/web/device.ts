@@ -1,28 +1,48 @@
 /** この端末と、開き方(ホーム画面から/ブラウザから)の判定。 */
+import { BROWSER_CONTEXT } from "../shared/push-policy";
 
 const LAUNCH_KEY = "sabu6.launch";
 
-/** ホーム画面のアイコンから起動したときに付く ?launch=<対象> を覚えて、URL からは消す。 */
+/**
+ * ホーム画面のアイコンから起動したときに付く ?launch=<対象> を覚えて、URL からは消す。
+ * iPhone ではアイコンごとに保存領域が分かれているので、localStorage に残せば
+ * 通知のタップなど ?launch= が付かない起動でも、どのアイコンのアプリかが分かる。
+ */
 export function captureLaunchSource(): void {
   const url = new URL(window.location.href);
   const launch = url.searchParams.get("launch");
   if (!launch) return;
-  try {
-    sessionStorage.setItem(LAUNCH_KEY, launch);
-  } catch {
-    // 保存できない環境では、記録しないだけ
+  if (isStandalone()) {
+    for (const storage of [localStorage, sessionStorage]) {
+      try {
+        storage.setItem(LAUNCH_KEY, launch);
+      } catch {
+        // 保存できない環境では、記録しないだけ
+      }
+    }
   }
   url.searchParams.delete("launch");
   window.history.replaceState(null, "", url.pathname + url.search + url.hash);
 }
 
-/** どのアイコンから起動したか("app"、"piyolog" など)。ブラウザで開いたときは null。 */
+/** どのアイコンのアプリとして動いているか("app"、"piyolog" など)。ブラウザや不明のときは null。 */
 export function launchSource(): string | null {
-  try {
-    return sessionStorage.getItem(LAUNCH_KEY);
-  } catch {
-    return null;
+  if (!isStandalone()) return null;
+  for (const storage of [localStorage, sessionStorage]) {
+    try {
+      const value = storage.getItem(LAUNCH_KEY);
+      if (value) return value;
+    } catch {
+      // 読めない環境では次を試す
+    }
   }
+  return null;
+}
+
+/** 通知の登録に使う開き方。ブラウザは "browser"、アイコンから開いて記録が無いときは "unknown"。 */
+export function appContext(): string {
+  if (!isStandalone()) return BROWSER_CONTEXT;
+  return launchSource() ?? "unknown";
 }
 
 export function isStandalone(): boolean {

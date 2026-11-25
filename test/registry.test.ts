@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateFeatures, type FeatureMeta } from "../src/core/shared/feature";
+import { canRegisterPush } from "../src/core/shared/push-policy";
 import { coreMigrations } from "../src/core/server/db/core-migrations";
 import { splitSqlStatements } from "../src/core/server/db/migrate";
 import { features, registeredFeatures } from "../src/features/registry";
@@ -7,9 +8,9 @@ import { featureMigrations } from "../src/features/registry.migrations";
 import { featureServers } from "../src/features/registry.server";
 
 describe("機能レジストリ", () => {
-  it("ホームには、ぴよログとダミー1〜8の合計9個が、この順に並ぶ", () => {
+  it("ホームには、育児ログとダミー1〜8の合計9個が、この順に並ぶ", () => {
     expect(features.map((f) => f.name)).toEqual([
-      "ぴよログ",
+      "育児ログ",
       "ダミー1",
       "ダミー2",
       "ダミー3",
@@ -51,15 +52,28 @@ describe("機能レジストリ", () => {
 
 describe("マイグレーション", () => {
   it("共通部分のマイグレーションが読み込まれ、文に分けられる", () => {
-    expect(coreMigrations.map((m) => m.id)).toEqual(["core/0001_init.sql"]);
+    expect(coreMigrations.map((m) => m.id)).toEqual(["core/0001_init.sql", "core/0002_push_app_context.sql"]);
     const statements = splitSqlStatements(coreMigrations[0]!.sql);
     expect(statements).toHaveLength(5);
     expect(statements.every((s) => !s.includes("--"))).toBe(true);
+    expect(splitSqlStatements(coreMigrations[1]!.sql)).toEqual([
+      "ALTER TABLE core_push_subscriptions ADD COLUMN app_context TEXT",
+    ]);
   });
 
   it("機能のマイグレーションのIDは、フォルダ名で始まる", () => {
     for (const m of featureMigrations) {
       expect(m.id).toMatch(/^[a-z][a-z0-9]*\/\d{4}_[a-z0-9_]+\.sql$/);
     }
+  });
+});
+
+describe("通知の宛先の登録", () => {
+  it("本体のアイコンとブラウザからは登録でき、機能単体のアイコンや不明な開き方からは登録できない", () => {
+    expect(canRegisterPush("app")).toBe(true);
+    expect(canRegisterPush("browser")).toBe(true);
+    for (const f of features) expect(canRegisterPush(f.id)).toBe(false);
+    expect(canRegisterPush("unknown")).toBe(false);
+    expect(canRegisterPush("")).toBe(false);
   });
 });

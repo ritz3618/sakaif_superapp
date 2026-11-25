@@ -72,16 +72,21 @@ function parseHexColor(hex: string): [number, number, number] {
 
 export type IconShape = "grid" | "circle";
 
-/** 既定アイコンを描く。円の縁は1画素ぶんだけなめらかにする。 */
+/** 1画素(RGBA)を、Uint32Array に書き込める1つの数にする(CPU のバイト順に依存しない書き方)。 */
+function packPixel(r: number, g: number, b: number): number {
+  return new Uint32Array(new Uint8Array([r, g, b, 255]).buffer)[0]!;
+}
+
+/**
+ * 既定アイコンを描く。円の縁は1画素ぶんだけなめらかにする。
+ * 無料プランの CPU 時間(1回10ms)に収まるよう、塗りつぶしはまとめて行い、計算は円の縁の画素だけにする。
+ */
 export async function renderDefaultIcon(size: number, color: string, shape: IconShape): Promise<Uint8Array> {
   const [r, g, b] = parseHexColor(color);
   const rgba = new Uint8Array(size * size * 4);
-  for (let i = 0; i < size * size; i++) {
-    rgba[i * 4] = r;
-    rgba[i * 4 + 1] = g;
-    rgba[i * 4 + 2] = b;
-    rgba[i * 4 + 3] = 255;
-  }
+  const pixels = new Uint32Array(rgba.buffer);
+  pixels.fill(packPixel(r, g, b));
+  const white = packPixel(255, 255, 255);
 
   const circles: { cx: number; cy: number; radius: number }[] = [];
   if (shape === "circle") {
@@ -95,20 +100,44 @@ export async function renderDefaultIcon(size: number, color: string, shape: Icon
     }
   }
 
+  // 画素の中心と円の中心の距離 d から、白の割合を clamp(radius + 0.5 - d) とする。
+  const blendEdge = (x: number, y: number, dy: number, cx: number, radius: number) => {
+    if (x < 0 || x >= size) return;
+    const dx = x + 0.5 - cx;
+    const coverage = Math.min(1, Math.max(0, radius + 0.5 - Math.sqrt(dx * dx + dy * dy)));
+    if (coverage <= 0) return;
+    const i = (y * size + x) * 4;
+    rgba[i] = Math.round(rgba[i]! + (255 - rgba[i]!) * coverage);
+    rgba[i + 1] = Math.round(rgba[i + 1]! + (255 - rgba[i + 1]!) * coverage);
+    rgba[i + 2] = Math.round(rgba[i + 2]! + (255 - rgba[i + 2]!) * coverage);
+  };
+
   for (const { cx, cy, radius } of circles) {
-    const x0 = Math.max(0, Math.floor(cx - radius - 1));
-    const x1 = Math.min(size - 1, Math.ceil(cx + radius + 1));
-    const y0 = Math.max(0, Math.floor(cy - radius - 1));
-    const y1 = Math.min(size - 1, Math.ceil(cy + radius + 1));
+    const outer = radius + 0.5;
+    const inner = radius - 0.5;
+    const y0 = Math.max(0, Math.floor(cy - outer));
+    const y1 = Math.min(size - 1, Math.ceil(cy + outer));
     for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-        const coverage = Math.min(1, Math.max(0, radius + 0.5 - d));
-        if (coverage <= 0) continue;
-        const i = (y * size + x) * 4;
-        rgba[i] = Math.round(rgba[i]! + (255 - rgba[i]!) * coverage);
-        rgba[i + 1] = Math.round(rgba[i + 1]! + (255 - rgba[i + 1]!) * coverage);
-        rgba[i + 2] = Math.round(rgba[i + 2]! + (255 - rgba[i + 2]!) * coverage);
+      const dy = y + 0.5 - cy;
+      if (Math.abs(dy) >= outer) continue;
+      const halfOuter = Math.sqrt(outer * outer - dy * dy);
+      const halfInner = Math.abs(dy) < inner ? Math.sqrt(inner * inner - dy * dy) : -1;
+      // 完全に円の内側の画素は、まとめて白で塗る
+      let fullStart = size;
+      let fullEnd = -1;
+      if (halfInner >= 0) {
+        fullStart = Math.max(0, Math.ceil(cx - halfInner - 0.5));
+        fullEnd = Math.min(size - 1, Math.floor(cx + halfInner - 0.5));
+        if (fullEnd >= fullStart) pixels.fill(white, y * size + fullStart, y * size + fullEnd + 1);
+      }
+      // 縁の画素だけ、割合を計算して混ぜる
+      const edgeLeft = Math.floor(cx - halfOuter - 0.5);
+      const edgeRight = Math.ceil(cx + halfOuter - 0.5);
+      if (fullEnd < fullStart) {
+        for (let x = edgeLeft; x <= edgeRight; x++) blendEdge(x, y, dy, cx, radius);
+      } else {
+        for (let x = edgeLeft; x < fullStart; x++) blendEdge(x, y, dy, cx, radius);
+        for (let x = fullEnd + 1; x <= edgeRight; x++) blendEdge(x, y, dy, cx, radius);
       }
     }
   }

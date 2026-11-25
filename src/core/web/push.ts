@@ -3,7 +3,8 @@
  * iPhone では、ホーム画面に追加したアプリの中で、ボタンを押したときにしか許可を求められない。
  */
 import { apiJson, postJson } from "./api";
-import { deviceLabel } from "./device";
+import { canRegisterPush } from "../shared/push-policy";
+import { appContext, deviceLabel } from "./device";
 
 export function pushSupported(): boolean {
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -45,6 +46,12 @@ export async function enablePush(publicKey: string): Promise<string> {
   if (!pushSupported()) {
     return "この開き方では通知を使えません。iPhone では、Safari の共有ボタンから「ホーム画面に追加」して、そのアイコンから開いてください。";
   }
+  const context = appContext();
+  if (!canRegisterPush(context)) {
+    return context === "unknown"
+      ? "どのアイコンから開いたか分かりませんでした。ホーム画面のアイコンから開き直してください。"
+      : "通知は、本体のアイコンから開いて有効にしてください(機能のアイコンでは有効にできません)。";
+  }
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
     return "通知が許可されませんでした。iPhone の「設定」→「通知」から、このアプリの通知を許可してください。";
@@ -61,6 +68,7 @@ export async function enablePush(publicKey: string): Promise<string> {
     endpoint: json.endpoint,
     keys: json.keys,
     deviceLabel: deviceLabel(),
+    appContext: context,
   });
   return "この端末で通知を受け取れるようにしました。";
 }

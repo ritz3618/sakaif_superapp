@@ -1,4 +1,4 @@
-/** ぴよログの画面。第1段階では、準備中の表示だけ。 */
+/** 育児ログ(ぴよログのデータを使う機能)の画面。第1段階では、準備中の表示だけ。 */
 import type { FeatureScreenProps } from "../../core/web/feature-api";
 
 export default function PiyologScreen({ feature }: FeatureScreenProps) {

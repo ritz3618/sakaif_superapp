@@ -4,6 +4,9 @@
   "name": "sabu6",
   "main": "./src/worker.ts",
   "compatibility_date": "2026-11-24",
+  // 公開URL(workers.dev)を有効にし、プレビュー用のURLは使わない(プレビューは本番と同じ D1 を使うため)。
+  "workers_dev": true,
+  "preview_urls": false,
   // ダッシュボードで設定した変数(ACCESS_TEAM_DOMAIN、ACCESS_AUD など)を、デプロイで消さない。
   "keep_vars": true,
   "assets": {

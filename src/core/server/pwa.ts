@@ -5,11 +5,15 @@
  * - manifest の scope は全部 "/"。機能単体で追加したアイコンから開いても、ホームへ戻るボタンがアプリ内で動くようにするため。
  * - 開いたパスに応じて、HTML の先頭部分(manifest、apple-touch-icon、タイトル)を Worker が書き換える。
  *   iPhone は「ホーム画面に追加」したときの HTML からアイコンと名前を読むため。
- * - manifest とアイコンは /pwa/ の下に置く。将来、この下だけ Access を通さない設定にできるように。
+ * - ホーム画面用のアイコンは、HTML と manifest の中に画像データとして埋め込む(data URI)。
+ *   iPhone はアイコンを Cookie なしで取りに来るらしく、URL で指定すると Access のログイン画面に転送されて
+ *   アイコンが付かなかったため(2026-11-25 の実機確認と、Cookie なしで取得したときの応答から判断)。
+ * - 画面の中で使うアイコン(ホームのカード、通知)は、従来どおり /pwa/ の URL で返す。
  */
 import { APP_INFO } from "../shared/app";
 import type { FeatureMeta } from "../shared/feature";
 import { featurePath } from "../shared/feature";
+import { bytesToBase64 } from "./encoding";
 import { renderDefaultIcon } from "./png";
 
 export interface PwaTarget {
@@ -22,7 +26,11 @@ export interface PwaTarget {
   isApp: boolean;
 }
 
-export const ICON_SIZES = [180, 192, 512] as const;
+/**
+ * 180 は iPhone のホーム画面用(apple-touch-icon)、192 は manifest と画面の中で使う。
+ * 512 は、無料プランの CPU 時間(1回10ms)の中で生成するには重いため用意しない(利用端末は iPhone のみ)。
+ */
+export const ICON_SIZES = [180, 192] as const;
 export type IconSize = (typeof ICON_SIZES)[number];
 
 export function pwaTargets(features: readonly FeatureMeta[]): PwaTarget[] {
@@ -62,7 +70,12 @@ export function manifestUrl(targetId: string): string {
   return `/pwa/${targetId}/manifest.webmanifest`;
 }
 
-export function buildManifest(target: PwaTarget): Record<string, unknown> {
+export function pngDataUri(png: Uint8Array): string {
+  return `data:image/png;base64,${bytesToBase64(png)}`;
+}
+
+/** manifest を作る。icon192 には、192px のアイコンの指定(data URI)を渡す。 */
+export function buildManifest(target: PwaTarget, icon192: string): Record<string, unknown> {
   return {
     id: target.path,
     name: target.name,
@@ -75,8 +88,7 @@ export function buildManifest(target: PwaTarget): Record<string, unknown> {
     background_color: "#ffffff",
     theme_color: target.color,
     icons: [
-      { src: iconUrl(target.id, 192), sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: iconUrl(target.id, 512), sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: icon192, sizes: "192x192", type: "image/png", purpose: "any" },
     ],
   };
 }
@@ -90,15 +102,15 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/** index.html の <meta name="x-pwa-head"> と置き換える HTML。 */
-export function headHtml(target: PwaTarget): string {
+/** index.html の <meta name="x-pwa-head"> と置き換える HTML。touchIcon は apple-touch-icon の指定(data URI)。 */
+export function headHtml(target: PwaTarget, touchIcon: string): string {
   const name = escapeHtml(target.name);
   const shortName = escapeHtml(target.shortName);
   return [
     `<title>${name}</title>`,
     // Access の後ろでも manifest を読めるように、Cookie を付けて取得させる。
     `<link rel="manifest" href="${manifestUrl(target.id)}" crossorigin="use-credentials">`,
-    `<link rel="apple-touch-icon" href="${iconUrl(target.id, 180)}">`,
+    `<link rel="apple-touch-icon" href="${escapeHtml(touchIcon)}">`,
     `<link rel="icon" type="image/png" href="${iconUrl(target.id, 192)}">`,
     `<meta name="apple-mobile-web-app-title" content="${shortName}">`,
     `<meta name="theme-color" content="${escapeHtml(target.color)}">`,
@@ -107,11 +119,11 @@ export function headHtml(target: PwaTarget): string {
 }
 
 /** HTML の先頭部分を、その画面用に書き換える。 */
-export function injectHead(response: Response, target: PwaTarget): Response {
+export function injectHead(response: Response, target: PwaTarget, touchIcon: string): Response {
   const rewritten = new HTMLRewriter()
     .on('meta[name="x-pwa-head"]', {
       element(el) {
-        el.replace(headHtml(target), { html: true });
+        el.replace(headHtml(target, touchIcon), { html: true });
       },
     })
     .transform(response);

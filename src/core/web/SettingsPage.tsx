@@ -5,8 +5,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { MeResponse, PushSubscriptionInfo, PushTestResult, StatusResponse } from "../shared/api-types";
 import type { FeatureMeta } from "../shared/feature";
+import { canRegisterPush } from "../shared/push-policy";
 import { apiJson, postJson } from "./api";
-import { iosVersion, isStandalone, launchSource } from "./device";
+import { appContext, iosVersion, isStandalone, launchSource } from "./device";
 import { Header } from "./Header";
 import { currentSubscription, disablePush, enablePush, loadPublicKey, pushSupported } from "./push";
 
@@ -37,7 +38,12 @@ export function SettingsPage({ appName, features }: { appName: string; features:
   const launch = launchSource();
   const standalone = isStandalone();
   const internalFeatures = features.filter((f) => f.kind === "internal");
-  const launchedFromFeature = launch !== null && launch !== "app";
+  const context = appContext();
+  // 機能単体のアイコンから開いているときは、通知を有効にできない(本体と二重に届くのを防ぐ)
+  const registrationAllowed = canRegisterPush(context);
+  const featureName = (id: string) => features.find((f) => f.id === id)?.name ?? id;
+  const contextLabel = (value: string | null) =>
+    value === "app" ? `${appName}本体` : value === "browser" ? "ブラウザ" : value ? featureName(value) : "(記録なし)";
 
   const refresh = useCallback(async () => {
     const local = await currentSubscription();
@@ -84,7 +90,7 @@ export function SettingsPage({ appName, features }: { appName: string; features:
           <dl className="kv">
             <Row label="ログイン中" value={me?.email ?? "確認中…"} />
             <Row label="開き方" value={standalone ? "ホーム画面のアイコンから" : "ブラウザから"} />
-            <Row label="起動したアイコン" value={launch ? (launch === "app" ? appName : launch) : "(記録なし)"} />
+            <Row label="起動したアイコン" value={standalone ? contextLabel(launch) : "—(ブラウザ)"} />
             <Row label="iOS" value={iosVersion() ?? "iPhone 以外"} />
           </dl>
         </section>
@@ -94,9 +100,11 @@ export function SettingsPage({ appName, features }: { appName: string; features:
           <p className="note">
             通知の許可は、{appName}全体で1回だけです。ホーム画面に追加した「{appName}」のアイコンから開いて、有効にしてください。
           </p>
-          {launchedFromFeature && (
+          {!registrationAllowed && (
             <p className="note note--warn">
-              いまは機能のアイコンから開いています。通知の許可は「{appName}」のアイコンから開いて行ってください。
+              {context === "unknown"
+                ? "どのアイコンから開いたか分かりません。ホーム画面のアイコンから開き直してください。"
+                : `いまは「${featureName(context)}」のアイコンから開いています。ここでは通知を有効にできません。「${appName}」のアイコンから開いて有効にしてください。`}
             </p>
           )}
           <dl className="kv">
@@ -112,7 +120,11 @@ export function SettingsPage({ appName, features }: { appName: string; features:
             <Row label="この端末の登録" value={hasLocalSubscription ? "登録済み" : "未登録"} />
           </dl>
           <div className="buttons">
-            <button type="button" disabled={busy || !publicKey} onClick={() => publicKey && run(() => enablePush(publicKey))}>
+            <button
+              type="button"
+              disabled={busy || !publicKey || !registrationAllowed}
+              onClick={() => publicKey && run(() => enablePush(publicKey))}
+            >
               通知を有効にする
             </button>
             <button type="button" className="button--secondary" disabled={busy || !hasLocalSubscription} onClick={() => run(disablePush)}>
@@ -146,7 +158,8 @@ export function SettingsPage({ appName, features }: { appName: string; features:
                 <strong>{s.deviceLabel ?? "端末"}</strong>
                 {s.isThisDevice && <span className="badge">この端末</span>}
                 <span className="device-list__meta">
-                  {s.service} / 登録 {formatJst(s.createdAt)} / 最終送信 {formatJst(s.lastSuccessAt)}
+                  登録元 {contextLabel(s.appContext)} / {s.service} / 登録 {formatJst(s.createdAt)} / 最終送信{" "}
+                  {formatJst(s.lastSuccessAt)}
                 </span>
                 {s.lastError && <span className="device-list__error">直近のエラー: {s.lastError}</span>}
               </li>
