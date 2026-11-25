@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   // Worker名。公開URLは https://<name>.<アカウントのサブドメイン>.workers.dev になる。
-  "name": "superapp",
+  "name": "sabu6",
   "main": "./src/worker.ts",
   "compatibility_date": "2026-11-24",
   // ダッシュボードで設定した変数(ACCESS_TEAM_DOMAIN、ACCESS_AUD など)を、デプロイで消さない。

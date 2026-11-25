@@ -4,7 +4,7 @@
  */
 export const APP_INFO = {
   id: "app",
-  name: "家族アプリ",
-  shortName: "家族アプリ",
+  name: "SABU6",
+  shortName: "SABU6",
   color: "#3D5A80",
 } as const;

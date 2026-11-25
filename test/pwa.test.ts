@@ -60,17 +60,17 @@ describe("ログイン", () => {
 
   it("dev モードは localhost からだけ使える", async () => {
     expect(await authenticate(new Request("http://localhost:5173/"), env)).toEqual({ ok: true, email: "dev@example.com" });
-    const remote = await authenticate(new Request("https://superapp.example.workers.dev/"), env);
+    const remote = await authenticate(new Request("https://sabu6.example.workers.dev/"), env);
     expect(remote.ok).toBe(false);
   });
 
   it("Access モードで設定が無ければ、ログインさせない", async () => {
-    const result = await authenticate(new Request("https://superapp.example.workers.dev/"), { AUTH_MODE: "access" } as Env);
+    const result = await authenticate(new Request("https://sabu6.example.workers.dev/"), { AUTH_MODE: "access" } as Env);
     expect(result).toMatchObject({ ok: false, status: 503 });
   });
 
   it("Access モードでトークンが無ければ、ログインさせない", async () => {
-    const result = await authenticate(new Request("https://superapp.example.workers.dev/"), {
+    const result = await authenticate(new Request("https://sabu6.example.workers.dev/"), {
       AUTH_MODE: "access",
       ACCESS_TEAM_DOMAIN: "example.cloudflareaccess.com",
       ACCESS_AUD: "aud",

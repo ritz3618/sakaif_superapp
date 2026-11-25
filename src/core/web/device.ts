@@ -1,6 +1,6 @@
 /** この端末と、開き方(ホーム画面から/ブラウザから)の判定。 */
 
-const LAUNCH_KEY = "superapp.launch";
+const LAUNCH_KEY = "sabu6.launch";
 
 /** ホーム画面のアイコンから起動したときに付く ?launch=<対象> を覚えて、URL からは消す。 */
 export function captureLaunchSource(): void {

@@ -88,12 +88,12 @@ describe("VAPID(RFC 8292)", () => {
   it("作ったトークンが、公開鍵で検証できる", async () => {
     const keys = await generateVapidKeys();
     const expires = new Date(Date.now() + 60 * 60 * 1000);
-    const jwt = await createVapidJwt(keys.privateJwk, "https://web.push.apple.com", "https://superapp.example.workers.dev", expires);
+    const jwt = await createVapidJwt(keys.privateJwk, "https://web.push.apple.com", "https://sabu6.example.workers.dev", expires);
 
     expect(decodeProtectedHeader(jwt)).toEqual({ typ: "JWT", alg: "ES256" });
     const publicKey = await importJWK(ecJwk(keys.publicKey), "ES256");
     const { payload } = await jwtVerify(jwt, publicKey, { audience: "https://web.push.apple.com" });
-    expect(payload.sub).toBe("https://superapp.example.workers.dev");
+    expect(payload.sub).toBe("https://sabu6.example.workers.dev");
     expect(payload.exp).toBe(Math.floor(expires.getTime() / 1000));
     expect(base64UrlToBytes(keys.publicKey)).toHaveLength(65);
   });
