@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Worker名。公開URLは https://<name>.<アカウントのサブドメイン>.workers.dev になる。
+  "name": "sabu6",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-11-24",
+  // ダッシュボードで設定した変数(ACCESS_TEAM_DOMAIN、ACCESS_AUD など)を、デプロイで消さない。
+  "keep_vars": true,
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // ビルド済みのJS/CSS(/assets/*)以外は、すべてWorkerを先に通す(ログイン確認、HTMLの書き換え)。
+    "run_worker_first": ["/*", "!/assets/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "superapp",
+      // Cloudflareの画面で作成したD1のID(秘密情報ではない)
+      "database_id": "738fadcb-e745-4f28-8a9c-b93a3f998fa3"
+    }
+  ],
+  // 定期実行の入口は1本だけ(5分おき)。各機能の処理は、ここから順に呼ぶ。
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "vars": {
+    // ログイン方式。本番は Cloudflare Access。ローカル開発では .dev.vars で "dev" に上書きする。
+    "AUTH_MODE": "access"
+  },
+  "observability": { "enabled": true },
+  "upload_source_maps": true
+}

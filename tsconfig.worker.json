@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["@cloudflare/workers-types", "vite/client"]
+  },
+  "include": [
+    "src/worker.ts",
+    "src/core/shared/**/*.ts",
+    "src/core/server/**/*.ts",
+    "src/features/*/feature.ts",
+    "src/features/*/server.ts",
+    "src/features/registry.ts",
+    "src/features/registry.server.ts",
+    "src/features/registry.migrations.ts"
+  ]
+}

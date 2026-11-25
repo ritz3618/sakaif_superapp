@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"]
+  },
+  "include": [
+    "src/main.tsx",
+    "src/core/shared/**/*.ts",
+    "src/core/web/**/*.ts",
+    "src/core/web/**/*.tsx",
+    "src/features/*/feature.ts",
+    "src/features/*/web.tsx",
+    "src/features/registry.ts",
+    "src/features/registry.web.ts"
+  ]
+}
