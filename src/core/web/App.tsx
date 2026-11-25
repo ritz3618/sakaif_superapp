@@ -5,7 +5,9 @@ import { FeatureShell, type FeatureScreenLoader } from "./FeatureShell";
 import { Header } from "./Header";
 import { Home } from "./Home";
 import { Link, usePath } from "./router";
-import { SettingsPage } from "./SettingsPage";
+import { HomeOrderPage } from "./settings/HomeOrderPage";
+import { IconsPage } from "./settings/IconsPage";
+import { SettingsPage } from "./settings/SettingsPage";
 
 export interface AppProps {
   features: readonly FeatureMeta[];
@@ -16,6 +18,8 @@ export function App({ features, loaders }: AppProps) {
   const path = usePath();
 
   if (path === "/") return <Home appName={APP_INFO.name} />;
+  if (path === "/settings/order/") return <HomeOrderPage />;
+  if (path === "/settings/icons/") return <IconsPage />;
   if (path.startsWith("/settings/")) return <SettingsPage appName={APP_INFO.name} features={features} />;
 
   const id = path.split("/")[1] ?? "";

@@ -7,17 +7,8 @@
  * - それ以外             画面(index.html の先頭部分を、開いた画面用に書き換えて返す)
  */
 import { Hono, type Context } from "hono";
-import { APP_INFO } from "../shared/app";
-import type {
-  HomeCard,
-  HomeResponse,
-  MeResponse,
-  PushSubscriptionInfo,
-  PushTestResult,
-  StatusResponse,
-} from "../shared/api-types";
+import type { JobStatus, MeResponse, PushSubscriptionInfo, PushTestResult, StatusResponse } from "../shared/api-types";
 import type { FeatureMeta } from "../shared/feature";
-import { featurePath } from "../shared/feature";
 import { canRegisterPush } from "../shared/push-policy";
 import { authenticate, getOrCreateUser } from "./auth";
 import { ensureMigrated, type Migration } from "./db/migrate";
@@ -25,12 +16,11 @@ import { base64UrlToBytes } from "./encoding";
 import type { AppBindings } from "./env";
 import type { FeatureServer } from "./feature-api";
 import { kvGet } from "./kv";
-import { notify } from "./notify";
+import { CORE_FEATURE_ID, CORE_TEST_TYPE, notify } from "./notify";
 import { getVapidKeys, rememberAppOrigin, serviceName } from "./push/sender";
 import {
   buildManifest,
   ICON_SIZES,
-  iconUrl,
   injectHead,
   loadIcon,
   pngDataUri,
@@ -38,7 +28,10 @@ import {
   targetForPath,
   type IconSize,
 } from "./pwa";
+import { registerHomeRoutes } from "./routes/home-routes";
+import { registerSettingsRoutes } from "./routes/settings-routes";
 import { LAST_CRON_KEY } from "./scheduler";
+import { featureSettings, type SettingsNamespace } from "./settings";
 
 export interface RegisteredFeatureServer {
   meta: FeatureMeta;
@@ -49,6 +42,8 @@ export interface AppDependencies {
   features: readonly FeatureMeta[];
   servers: readonly RegisteredFeatureServer[];
   migrations: readonly Migration[];
+  /** 設定の一覧(buildSettingsRegistry で作る) */
+  registry: readonly SettingsNamespace[];
 }
 
 type AppContext = Context<AppBindings>;
@@ -93,9 +88,9 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
     const size = Number(match?.[1]) as IconSize;
     if (!match || !ICON_SIZES.includes(size)) return c.notFound();
     const png = await loadIcon(c.env.DB, target, size);
-    return new Response(png, {
-      headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=3600" },
-    });
+    // ?v=<更新時刻> 付きの URL は、画像を変えると URL も変わるので、長く保存してよい
+    const cache = c.req.query("v") ? "private, max-age=31536000, immutable" : "private, max-age=3600";
+    return new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": cache } });
   });
 
   // ---- ログイン確認(ここから下はログイン済みのみ) ----
@@ -118,40 +113,38 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
     return c.json<MeResponse>({ email: user.email, displayName: user.displayName });
   });
 
-  app.get("/api/core/home", async (c) => {
-    const user = c.get("user");
-    const cards = await Promise.all(
-      deps.features.map(async (f): Promise<HomeCard> => {
-        const server = deps.servers.find((s) => s.meta.id === f.id)?.server;
-        let summary: string | null = null;
-        if (server?.homeSummary) {
-          try {
-            summary = await server.homeSummary({ env: c.env, db: c.env.DB, user, feature: f });
-          } catch (error) {
-            console.error(`[home] ${f.id} の要約を作れませんでした`, error);
-          }
-        }
-        const internal = f.kind === "internal";
-        return {
-          id: f.id,
-          name: f.name,
-          kind: f.kind,
-          href: internal ? featurePath(f.id) : (f.url ?? "#"),
-          iconUrl: internal ? iconUrl(f.id, 192) : iconUrl(APP_INFO.id, 192),
-          color: f.color,
-          summary,
-        };
-      }),
-    );
-    return c.json<HomeResponse>({ appName: APP_INFO.name, cards });
-  });
-
   app.get("/api/core/status", async (c) => {
+    const rows = await c.env.DB.prepare(
+      "SELECT feature_id, consecutive_failures, last_success_at, last_failure_at, last_error FROM core_job_runs",
+    ).all<{
+      feature_id: string;
+      consecutive_failures: number;
+      last_success_at: string | null;
+      last_failure_at: string | null;
+      last_error: string | null;
+    }>();
+    const jobs = deps.servers
+      .filter((s) => s.server.scheduled)
+      .map(({ meta }): JobStatus => {
+        const r = rows.results.find((x) => x.feature_id === meta.id);
+        return {
+          featureId: meta.id,
+          featureName: meta.name,
+          consecutiveFailures: r?.consecutive_failures ?? 0,
+          lastSuccessAt: r?.last_success_at ?? null,
+          lastFailureAt: r?.last_failure_at ?? null,
+          lastError: r?.last_error ?? null,
+        };
+      });
     return c.json<StatusResponse>({
       lastCronAt: await kvGet(c.env.DB, LAST_CRON_KEY),
       serverTime: new Date().toISOString(),
+      jobs,
     });
   });
+
+  registerHomeRoutes(app, deps.features, deps.servers, targets, deps.registry);
+  registerSettingsRoutes(app, deps.features, deps.registry);
 
   // ---- 通知の宛先登録(許可はスーパーアプリ本体で1回だけ行う) ----
   app.get("/api/core/push/public-key", async (c) => {
@@ -247,13 +240,20 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
     const { path } = await c.req.json<{ path?: string }>();
     const target = targetForPath(path ?? "/", targets);
     const started = Date.now();
-    const results = await notify(c.env.DB, {
-      to: [user.id],
-      title: "テスト通知",
-      body: `タップすると「${target.name}」が開きます。`,
-      url: target.path,
-      tag: "core-test",
-    });
+    const userResults = await notify(
+      { db: c.env.DB, registry: deps.registry },
+      {
+        featureId: CORE_FEATURE_ID,
+        type: CORE_TEST_TYPE,
+        to: [user.id],
+        title: "テスト通知",
+        body: `タップすると「${target.name}」が開きます。`,
+        url: target.path,
+        tag: "core-test",
+        ignoreQuietHours: true,
+      },
+    );
+    const results = userResults.flatMap((r) => r.sends);
     console.log(`[push-test] ${results.length}件 ${Date.now() - started}ms`);
     return c.json<PushTestResult>({
       sent: results.filter((r) => r.ok).length,
@@ -267,6 +267,17 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
   for (const { meta, server } of deps.servers) {
     if (!server.routes) continue;
     const sub = new Hono<AppBindings>();
+    // 機能のハンドラーが featureContext(c) で、ユーザーと設定をまとめて取れるようにする
+    sub.use("*", async (c, next) => {
+      c.set("featureContext", {
+        env: c.env,
+        db: c.env.DB,
+        user: c.get("user"),
+        feature: meta,
+        settings: featureSettings(c.env.DB, deps.registry, meta.id),
+      });
+      await next();
+    });
     server.routes(sub, meta);
     app.route(`/api/f/${meta.id}`, sub);
   }

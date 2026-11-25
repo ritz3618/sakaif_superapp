@@ -52,7 +52,11 @@ describe("機能レジストリ", () => {
 
 describe("マイグレーション", () => {
   it("共通部分のマイグレーションが読み込まれ、文に分けられる", () => {
-    expect(coreMigrations.map((m) => m.id)).toEqual(["core/0001_init.sql", "core/0002_push_app_context.sql"]);
+    expect(coreMigrations.map((m) => m.id)).toEqual([
+      "core/0001_init.sql",
+      "core/0002_push_app_context.sql",
+      "core/0003_settings_notifications_jobs.sql",
+    ]);
     const statements = splitSqlStatements(coreMigrations[0]!.sql);
     expect(statements).toHaveLength(5);
     expect(statements.every((s) => !s.includes("--"))).toBe(true);

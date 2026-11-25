@@ -1,33 +1,15 @@
-/**
- * スーパーアプリの設定画面。
- * 第1段階では「この端末と通知」(実機での動作確認に使う)だけ。設定項目の自動生成は第2段階で足す。
- */
+/** 設定画面の「この端末」と「通知(この端末の登録とテスト通知)」の欄。 */
 import { useCallback, useEffect, useState } from "react";
-import type { MeResponse, PushSubscriptionInfo, PushTestResult, StatusResponse } from "../shared/api-types";
-import type { FeatureMeta } from "../shared/feature";
-import { canRegisterPush } from "../shared/push-policy";
-import { apiJson, postJson } from "./api";
-import { appContext, iosVersion, isStandalone, launchSource } from "./device";
-import { Header } from "./Header";
-import { currentSubscription, disablePush, enablePush, loadPublicKey, pushSupported } from "./push";
+import type { MeResponse, PushSubscriptionInfo, PushTestResult } from "../../shared/api-types";
+import type { FeatureMeta } from "../../shared/feature";
+import { canRegisterPush } from "../../shared/push-policy";
+import { apiJson, postJson } from "../api";
+import { appContext, iosVersion, isStandalone, launchSource } from "../device";
+import { currentSubscription, disablePush, enablePush, loadPublicKey, pushSupported } from "../push";
+import { formatJst, Row } from "./common";
 
-function formatJst(iso: string | null): string {
-  if (!iso) return "まだありません";
-  return new Date(iso).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="kv-row">
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
-  );
-}
-
-export function SettingsPage({ appName, features }: { appName: string; features: readonly FeatureMeta[] }) {
+export function DevicePanel({ appName, features }: { appName: string; features: readonly FeatureMeta[] }) {
   const [me, setMe] = useState<MeResponse | null>(null);
-  const [status, setStatus] = useState<StatusResponse | null>(null);
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [subscriptions, setSubscriptions] = useState<PushSubscriptionInfo[] | null>(null);
   const [hasLocalSubscription, setHasLocalSubscription] = useState(false);
@@ -53,7 +35,6 @@ export function SettingsPage({ appName, features }: { appName: string; features:
 
   useEffect(() => {
     apiJson<MeResponse>("/api/core/me").then(setMe).catch(() => setMe(null));
-    apiJson<StatusResponse>("/api/core/status").then(setStatus).catch(() => setStatus(null));
     loadPublicKey().then(setPublicKey).catch((e: unknown) => setMessage(String(e)));
     refresh().catch((e: unknown) => setMessage(String(e)));
   }, [refresh]);
@@ -82,9 +63,7 @@ export function SettingsPage({ appName, features }: { appName: string; features:
     });
 
   return (
-    <div className="page">
-      <Header title="設定" showHome />
-      <main className="settings">
+    <>
         <section className="panel">
           <h2>この端末</h2>
           <dl className="kv">
@@ -167,13 +146,6 @@ export function SettingsPage({ appName, features }: { appName: string; features:
           </ul>
         </section>
 
-        <section className="panel">
-          <h2>定期実行</h2>
-          <dl className="kv">
-            <Row label="最後に動いた時刻" value={status ? formatJst(status.lastCronAt) : "確認中…"} />
-          </dl>
-        </section>
-      </main>
-    </div>
+    </>
   );
 }

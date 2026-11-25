@@ -65,6 +65,15 @@ export async function encodePng(width: number, height: number, rgba: Uint8Array)
   return png;
 }
 
+/** PNG の幅と高さを読む。PNG でなければ null。 */
+export function parsePngSize(bytes: Uint8Array): { width: number; height: number } | null {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (bytes.length < 33 || signature.some((b, i) => bytes[i] !== b)) return null;
+  if (String.fromCharCode(...bytes.subarray(12, 16)) !== "IHDR") return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
 function parseHexColor(hex: string): [number, number, number] {
   const n = Number.parseInt(hex.slice(1), 16);
   return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
