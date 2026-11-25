@@ -18,7 +18,7 @@ describe("PWA(ホーム画面に追加)", () => {
     const manifest = buildManifest(targets.find((t) => t.id === "piyolog")!, "data:image/png;base64,AAAA");
     expect(manifest).toMatchObject({
       id: "/piyolog/",
-      name: "ぴよログ",
+      name: "育児ログ",
       start_url: "/piyolog/?launch=piyolog",
       scope: "/",
       display: "standalone",

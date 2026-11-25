@@ -8,9 +8,9 @@ import { featureMigrations } from "../src/features/registry.migrations";
 import { featureServers } from "../src/features/registry.server";
 
 describe("機能レジストリ", () => {
-  it("ホームには、ぴよログとダミー1〜8の合計9個が、この順に並ぶ", () => {
+  it("ホームには、育児ログとダミー1〜8の合計9個が、この順に並ぶ", () => {
     expect(features.map((f) => f.name)).toEqual([
-      "ぴよログ",
+      "育児ログ",
       "ダミー1",
       "ダミー2",
       "ダミー3",
