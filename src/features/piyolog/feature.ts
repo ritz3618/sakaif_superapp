@@ -37,6 +37,19 @@ export default defineFeature({
       max: 720,
     },
     {
+      key: "dailyFeedingTargetMl",
+      label: "授乳の1日の目安量",
+      description:
+        "1日(0時〜24時)に飲む量の目安です(夫婦共通)。画面で、今日の量がこの目安に届いているかを表示します。未設定のときは、過去7日の1日あたりの平均と比べます。",
+      scope: "shared",
+      type: "number",
+      default: null,
+      unit: "ml",
+      min: 50,
+      max: 3000,
+      step: 10,
+    },
+    {
       key: "diaperIntervalMinutes",
       label: "おむつ替えの通知の間隔",
       description: "最後のおしっこ・うんちの記録からこの時間がたったら、通知します(夫婦共通)。",

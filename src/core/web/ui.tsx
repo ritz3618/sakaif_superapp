@@ -47,10 +47,20 @@ export function StatGrid({ children }: { children: ReactNode }) {
   return <div className="ui-stat-grid">{children}</div>;
 }
 
-/** 数値のタイル(ラベル・値と、補足) */
-export function Stat({ label, value, children }: { label: ReactNode; value: ReactNode; children?: ReactNode }) {
+/** 数値のタイル(ラベル・値と、補足)。tone="warn" で、値を注意の色にする */
+export function Stat({
+  label,
+  value,
+  children,
+  tone = "normal",
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  children?: ReactNode;
+  tone?: Tone;
+}) {
   return (
-    <div className="ui-stat">
+    <div className={cx("ui-stat", tone === "warn" && "ui-stat--warn")}>
       <span className="ui-stat__label">{label}</span>
       <span className="ui-stat__value">{value}</span>
       {children}

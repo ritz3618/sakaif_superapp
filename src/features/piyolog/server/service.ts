@@ -126,6 +126,27 @@ export async function runScheduledJob(ctx: FeatureJobContext): Promise<void> {
   }
 }
 
+/** 室温・湿度の機能が共通データに置いている値の出どころ(読むだけ) */
+const ROOM_SOURCE = "switchbot";
+
+function roomOf(temp: DataRecord | null, hum: DataRecord | null): PiyologSummary["room"] {
+  if (!temp && !hum) return null;
+  const warnings: NonNullable<PiyologSummary["room"]>["warnings"] = [];
+  for (const [metric, r] of [["temperature", temp], ["humidity", hum]] as const) {
+    if (!r?.payload) continue;
+    try {
+      const w = (JSON.parse(r.payload) as { warning?: { direction?: unknown; threshold?: unknown } | null }).warning;
+      if (w && (w.direction === "low" || w.direction === "high") && typeof w.threshold === "number") {
+        warnings.push({ metric, direction: w.direction, threshold: w.threshold });
+      }
+    } catch {
+      // 読めなければ注意なし
+    }
+  }
+  const at = [temp?.recordedAt, hum?.recordedAt].filter((x): x is string => !!x).sort().at(-1)!;
+  return { at, temperature: temp?.value ?? null, humidity: hum?.value ?? null, warnings };
+}
+
 const toLatest = (r: DataRecord | null): LatestValue | null =>
   r ? { at: r.recordedAt, value: r.value, unit: r.unit } : null;
 
@@ -137,14 +158,15 @@ export async function buildSummary(
   now: Date,
 ): Promise<PiyologSummary> {
   const config = await feedConfig(settings);
-  // 昨日を「その前の7日」と比べるため、9日前の0時から読む
-  const since = new Date(jstStartOfDay(now).getTime() - 9 * DAY_MS).toISOString();
-  const [state, rows, earliest, interval, lastFeeding, lastPee, lastPoop, temperature, weight, height, bath] =
+  // 過去7日と、7日前の夜からの睡眠のため、8日前の0時から読む
+  const since = new Date(jstStartOfDay(now).getTime() - 8 * DAY_MS).toISOString();
+  const [state, rows, earliest, interval, target, lastFeeding, lastPee, lastPoop, temperature, weight, height, bath, roomTemp, roomHum] =
     await Promise.all([
       readSyncState(db),
       data.query(PIYOLOG_SOURCE, { from: since }),
       data.earliestAt(PIYOLOG_SOURCE),
       settings.get("feedingIntervalMinutes"),
+      settings.get("dailyFeedingTargetMl"),
       data.latest(PIYOLOG_SOURCE, FEEDING_TYPES),
       data.latest(PIYOLOG_SOURCE, ["Pee"]),
       data.latest(PIYOLOG_SOURCE, ["Poop"]),
@@ -152,6 +174,8 @@ export async function buildSummary(
       data.latest(PIYOLOG_SOURCE, ["Weight"]),
       data.latest(PIYOLOG_SOURCE, ["Height"]),
       data.latest(PIYOLOG_SOURCE, ["Bath"]),
+      data.latest(ROOM_SOURCE, ["temperature"]),
+      data.latest(ROOM_SOURCE, ["humidity"]),
     ]);
   const records = rows.map((r) => ({ type: r.kind, at: Date.parse(r.recordedAt), value: r.value, unit: r.unit }));
   const earliestAt = earliest ? Date.parse(earliest) : null;
@@ -179,6 +203,7 @@ export async function buildSummary(
           }
         : null,
       intervalMinutes: interval as number,
+      dailyTargetMl: typeof target === "number" ? target : null,
     },
     pee: { lastAt: lastPee?.recordedAt ?? null },
     poop: { lastAt: lastPoop?.recordedAt ?? null },
@@ -189,7 +214,6 @@ export async function buildSummary(
       lastWakeAt: lastWake?.recordedAt ?? null,
     },
     today: stats.today,
-    yesterday: stats.yesterday,
     comparison: { sameTime: stats.sameTime, fullDay: stats.fullDay, perFeedingMl: stats.perFeedingMl },
     latest: {
       temperature: toLatest(temperature),
@@ -197,6 +221,7 @@ export async function buildSummary(
       height: toLatest(height),
       bath: toLatest(bath),
     },
+    room: roomOf(roomTemp, roomHum),
     timeline: computeTimeline(records, now.getTime(), earliestAt),
     expiry: config.createdOn ? { createdOn: config.createdOn, ...feedExpiry(config.createdOn, now.getTime()) } : null,
   };

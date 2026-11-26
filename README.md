@@ -3,6 +3,7 @@
 家族用スーパーアプリ(複数の機能を1つに載せる Web アプリの器)。Cloudflare Workers + D1 で動く PWA。
 最初の機能は「育児ログ」。ぴよログのデータフィードを5分おきに取得して D1 に保存し、経過時間・今日と昨日を過去1週間と比べた表・最近の体温など・今日と昨日の時間の帯の表示と、授乳・おむつ替え・フィード期限の通知を行う。
 過去の記録は、ぴよログの「月ごとのテキスト」を画面から取り込める。保存した記録は CSV で書き出せる。
+2つめの機能は「室温・湿度」。SwitchBot の温湿度計の値を5分おきに読んで共通データに保存し、基準の外になったら画面で知らせ、通知もできる(初期値オフ)。育児ログの画面にも、共通データから読んで表示する。
 
 - 要件と決定事項: 引き継ぎメモ(Claude Docs)
 - Cloudflare の準備と iPhone での確認: [docs/cloudflare-setup.md](docs/cloudflare-setup.md)
@@ -21,8 +22,9 @@ src/
       feature-api.ts   機能の画面側が使ってよい唯一の入口
   features/
     registry*.ts       機能のフォルダを自動で集める
-    piyolog/           feature.ts(宣言)/ server.ts / web.tsx / migrations/*.sql
-    dummy/             ダミー1〜8
+    piyolog/           育児ログ。feature.ts(宣言)/ server.ts / web.tsx / migrations/*.sql
+    room/              室温・湿度(SwitchBot)
+    dummy/             ダミー1〜7(ホームのカードを9枚にするための仮の機能)
 public/sw.js           Service Worker(通知の受信、タップしたときの画面遷移)
 test/                  単体テストと、境界ルールの検査
 ```
@@ -32,7 +34,8 @@ test/                  単体テストと、境界ルールの検査
 1. `src/features/<フォルダ名>/feature.ts` に、`defineFeature({ id, name, kind, color, order })` を書く。これだけでホームに並ぶ。
 2. 必要なら `server.ts`(`defineFeatureServer`)、`web.tsx`(画面)、`migrations/0001_*.sql` を足す。
    - 設定: `feature.ts` の `settings` に項目を宣言すると、設定画面に自動で出る。
-     種類は `boolean` / `minutes` / `timeRanges` / `date` / `text` / `secret`(秘密の値は画面に表示されない)。
+     種類は `boolean` / `minutes` / `timeRanges` / `date` / `text` / `number`(単位付き) / `select`(選択肢) /
+     `secret`(秘密の値は画面に表示されない)。
      保存先は `scope: "shared"`(夫婦共通)か `"user"`(ユーザーごと)。サーバー側では `ctx.settings.get(key, userId?)` で読む。
    - 通知: `feature.ts` の `notifications` に種類を宣言し、定期実行の中で `ctx.notify({ type, to, dedupeKey, title, body, url })` を呼ぶ。
      オン/オフ、通知を避ける時間帯(明けたときに送る)、重複防止(`dedupeKey` が同じなら1回だけ)、履歴は共通部分が処理する。

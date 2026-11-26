@@ -5,6 +5,8 @@
  *   timeRanges → 開始・終了の時刻の行を、追加・削除して「保存」
  *   date       → 日付を選んで「保存」/「クリア」
  *   text       → 文字を入れて「保存」
+ *   number     → 数値を入れて「保存」(未設定にできる項目は「クリア」も)
+ *   select     → 選択肢から選ぶ(選ぶとすぐ保存)
  *   secret     → 「設定済み」かどうかだけ表示。入力欄は伏せ字で、保存後は中身を表示しない
  */
 import { useState } from "react";
@@ -71,6 +73,28 @@ export function SettingField({ item, onSaved }: { item: SettingItem; onSaved: ()
         <TimeRangesInput key={item.updatedAt ?? "default"} value={item.value as TimeRange[]} disabled={busy} onSave={(v) => run(v)} />
       )}
       {def.type === "date" && <DateInput key={item.updatedAt ?? "default"} value={item.value as string | null} disabled={busy} onSave={(v) => run(v)} />}
+      {def.type === "number" && (
+        <NumberInput
+          key={item.updatedAt ?? "default"}
+          value={item.value as number | null}
+          unit={def.unit}
+          step={def.step}
+          clearable={def.default === null}
+          disabled={busy}
+          onSave={(v) => run(v, v === null ? "未設定にしました" : "保存しました")}
+        />
+      )}
+      {def.type === "select" && (
+        <div className="setting__inputs">
+          <select value={item.value as string} disabled={busy} onChange={(e) => run(e.target.value)} aria-label={def.label}>
+            {def.options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       {def.type === "text" && <TextInput key={item.updatedAt ?? "default"} value={item.value as string} disabled={busy} onSave={(v) => run(v)} />}
       {def.type === "secret" && (
         <SecretInput status={item.value as SecretStatus} disabled={busy} onSave={(v) => run(v, v === null ? "削除しました" : "保存しました")} />
@@ -166,6 +190,49 @@ function DateInput({ value, disabled, onSave }: { value: string | null; disabled
       </button>
       {value && (
         <button type="button" className="button--secondary" disabled={disabled} onClick={() => { setDate(""); onSave(null); }}>
+          クリア
+        </button>
+      )}
+    </div>
+  );
+}
+
+function NumberInput({
+  value,
+  unit,
+  step,
+  clearable,
+  disabled,
+  onSave,
+}: {
+  value: number | null;
+  unit?: string;
+  step?: number;
+  clearable: boolean;
+  disabled: boolean;
+  onSave: (v: number | null) => void;
+}) {
+  const [text, setText] = useState(value === null ? "" : String(value));
+  const parsed = text.trim() === "" ? null : Number(text);
+  const valid = parsed !== null && Number.isFinite(parsed);
+  return (
+    <div className="setting__inputs">
+      {value === null && <span className="note">未設定</span>}
+      <input
+        type="number"
+        inputMode="decimal"
+        step={step ?? "any"}
+        value={text}
+        disabled={disabled}
+        onChange={(e) => setText(e.target.value)}
+        className="setting__number"
+      />
+      {unit && <span>{unit}</span>}
+      <button type="button" disabled={disabled || !valid || parsed === value} onClick={() => valid && onSave(parsed)}>
+        保存
+      </button>
+      {clearable && value !== null && (
+        <button type="button" className="button--secondary" disabled={disabled} onClick={() => { setText(""); onSave(null); }}>
           クリア
         </button>
       )}

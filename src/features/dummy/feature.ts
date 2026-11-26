@@ -1,7 +1,10 @@
 import { defineFeature, type FeatureMeta } from "../../core/shared/feature";
 
-/** 動作確認用のダミー機能(ダミー1〜ダミー8)。ホームにカードを9枚並べるために置いている。 */
-const COLORS = ["#E76F51", "#2A9D8F", "#8E7DBE", "#4F86C6", "#D35D8B", "#6A994E", "#C77D2E", "#5C6B7A"];
+/**
+ * 動作確認用のダミー機能。ホームにカードを9枚並べるために置いている。
+ * 本物の機能が増えたら、その分だけ減らす(2026-11-26: 「室温・湿度」を足したので、ダミー8を外して7つ)。
+ */
+const COLORS = ["#E76F51", "#2A9D8F", "#8E7DBE", "#4F86C6", "#D35D8B", "#6A994E", "#C77D2E"];
 
 export default defineFeature(
   COLORS.map(

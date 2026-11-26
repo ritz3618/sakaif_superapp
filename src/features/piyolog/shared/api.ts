@@ -63,6 +63,8 @@ export interface PiyologSummary {
     last: { at: string; amountMl: number | null } | null;
     /** 授乳の基準の間隔(分)。これを過ぎたら、画面でも目立たせる */
     intervalMinutes: number;
+    /** 1日の目安量(ml)。未設定なら null(過去7日の1日あたりの平均と比べる) */
+    dailyTargetMl: number | null;
   };
   pee: { lastAt: string | null };
   poop: { lastAt: string | null };
@@ -75,12 +77,10 @@ export interface PiyologSummary {
   };
   /** 今日(日本時間の0時から今まで)の値 */
   today: DayMetrics;
-  /** 昨日(日本時間の0時〜24時)の値。記録が無ければ null */
-  yesterday: DayMetrics | null;
   comparison: {
-    /** 過去7日(昨日〜7日前)それぞれの「0時から、今と同じ時刻まで」の平均。今日と比べる */
+    /** 過去7日(昨日〜7日前)それぞれの「0時から、今と同じ時刻まで」の平均 */
     sameTime: Comparison | null;
-    /** 昨日より前の7日(2日前〜8日前)の、1日分の平均。昨日と比べる */
+    /** 過去7日(昨日〜7日前)の、1日分の平均 */
     fullDay: Comparison | null;
     /** 過去7日(昨日〜7日前)の、授乳1回あたりの平均量(ml) */
     perFeedingMl: number | null;
@@ -92,6 +92,16 @@ export interface PiyologSummary {
     height: LatestValue | null;
     bath: LatestValue | null;
   };
+  /**
+   * 室温・湿度(共通データ "switchbot" の最新の値。室温・湿度の機能が保存している)。値が無ければ null。
+   * warnings は、保存したときに基準と比べた結果。
+   */
+  room: {
+    at: string;
+    temperature: number | null;
+    humidity: number | null;
+    warnings: { metric: "temperature" | "humidity"; direction: "low" | "high"; threshold: number }[];
+  } | null;
   /** 時間の帯の表示(今日、昨日の順) */
   timeline: TimelineDay[];
   /** フィードURLの期限の目安(作成日から89日) */

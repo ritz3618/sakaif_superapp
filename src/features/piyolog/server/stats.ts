@@ -86,21 +86,21 @@ function average(days: readonly DayMetrics[]): Comparison | null {
 
 export interface Stats {
   today: DayMetrics;
-  yesterday: DayMetrics | null;
   sameTime: Comparison | null;
   fullDay: Comparison | null;
   perFeedingMl: number | null;
 }
 
 /**
- * records は、今日の0時の9日前より後の記録(削除の印が付いたものを除く)。
+ * records は、今日の0時の8日前より後の記録(削除の印が付いたものを除く)。
  * earliestAt は、保存されている最も古い記録の時刻(比較に使える日を決める)。
  *
- * 比べ方(2026-11-26):
- * - 今日(0時〜今)は、過去7日(昨日〜7日前)それぞれの「0時〜今と同じ時刻」の平均と比べる。
- * - 昨日(1日分)は、その前の7日(2日前〜8日前)の1日分の平均と比べる。
+ * 比べ方(2026-11-26 ユーザー確認):
+ * - 今の時刻まで: 今日(0時〜今)を、過去7日(昨日〜7日前)それぞれの「0時〜今と同じ時刻」の値の平均と比べる。
+ * - 1日分: 今日(0時〜今)を、過去7日(昨日〜7日前)の1日分の値の平均と比べる(今日は途中なので、少なく出る)。
  * - 比較に使う日は、その日の0時より前から記録があり、その日に1件以上の記録がある日だけ
  *   (記録を始めた日や、記録の抜けている日は、少なく見えるため除く)。
+ * - 1回あたりの量の平均も、過去7日(1日分すべて)から出す。
  */
 export function computeStats(records: readonly StatRecord[], now: number, earliestAt: number | null): Stats {
   const intervals = sleepIntervals(records, now);
@@ -112,29 +112,20 @@ export function computeStats(records: readonly StatRecord[], now: number, earlie
     earliestAt !== null && earliestAt <= dayStart && records.some((r) => r.at >= dayStart && r.at < dayStart + DAY_MS);
 
   const sameTimeDays: DayMetrics[] = [];
-  const recentFullDays: DayMetrics[] = [];
+  const fullDays: DayMetrics[] = [];
   for (let d = 1; d <= 7; d++) {
     const dayStart = todayStart - d * DAY_MS;
     if (!usable(dayStart)) continue;
     sameTimeDays.push(metricsBetween(records, intervals, dayStart, dayStart + elapsed));
-    recentFullDays.push(metricsBetween(records, intervals, dayStart, dayStart + DAY_MS));
+    fullDays.push(metricsBetween(records, intervals, dayStart, dayStart + DAY_MS));
   }
-  const olderFullDays: DayMetrics[] = [];
-  for (let d = 2; d <= 8; d++) {
-    const dayStart = todayStart - d * DAY_MS;
-    if (usable(dayStart)) olderFullDays.push(metricsBetween(records, intervals, dayStart, dayStart + DAY_MS));
-  }
-
-  const yesterdayStart = todayStart - DAY_MS;
-  const hasYesterday = records.some((r) => r.at >= yesterdayStart && r.at < todayStart);
-  const mlTotal = recentFullDays.reduce((sum, m) => sum + m.feedingMl, 0);
-  const mlCount = recentFullDays.reduce((sum, m) => sum + m.feedingMlCount, 0);
+  const mlTotal = fullDays.reduce((sum, m) => sum + m.feedingMl, 0);
+  const mlCount = fullDays.reduce((sum, m) => sum + m.feedingMlCount, 0);
 
   return {
     today,
-    yesterday: hasYesterday ? metricsBetween(records, intervals, yesterdayStart, todayStart) : null,
     sameTime: average(sameTimeDays),
-    fullDay: average(olderFullDays),
+    fullDay: average(fullDays),
     perFeedingMl: mlCount > 0 ? mlTotal / mlCount : null,
   };
 }

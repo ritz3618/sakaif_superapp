@@ -137,7 +137,7 @@ describe("集計", () => {
     expect(stats.perFeedingMl).toBe((100 + 999 + 140 + 120) / 4);
   });
 
-  it("昨日(1日分)は、その前の7日の1日分の平均と比べる。記録の無い日は平均に入れない", () => {
+  it("1日分は、過去7日それぞれの1日分の平均。記録の無い日は平均に入れない", () => {
     const now = jst("11-26 12:00");
     const records = [
       rec("Formula", "11-22 08:00", 100),
@@ -150,15 +150,10 @@ describe("集計", () => {
       rec("Formula", "11-26 09:00", 150),
     ];
     const stats = computeStats(records, now, jst("11-22 00:00"));
-    expect(stats.yesterday?.feedingMl).toBe(300);
-    expect(stats.fullDay?.days).toBe(2); // 11-22 と 11-24
-    expect(stats.fullDay?.average.feedingMl).toBe(220);
-  });
-
-  it("昨日の記録が無ければ、昨日は null", () => {
-    const now = jst("11-26 12:00");
-    const stats = computeStats([rec("Formula", "11-26 09:00", 150)], now, jst("11-20 00:00"));
-    expect(stats.yesterday).toBeNull();
+    expect(stats.fullDay?.days).toBe(3); // 11-22、11-24、11-25
+    expect(stats.fullDay?.average.feedingMl).toBe((200 + 240 + 300) / 3);
+    expect(stats.sameTime?.average.feedingMl).toBe((100 + 120 + 150) / 3); // 各日の12時まで
+    expect(stats.today.feedingMl).toBe(150);
   });
 });
 

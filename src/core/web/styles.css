@@ -403,6 +403,7 @@ button:disabled {
 input[type="time"],
 input[type="date"],
 input[type="text"],
+input[type="number"],
 input[type="password"] {
   font: inherit;
   font-size: 16px;
@@ -694,8 +695,13 @@ button.button--small {
   background: linear-gradient(var(--alert-bg), var(--surface) 70%);
 }
 
-.ui-big--warn {
+.ui-big--warn,
+.ui-stat--warn .ui-stat__value {
   color: var(--alert);
+}
+
+.ui-stat--warn {
+  background: var(--alert-bg);
 }
 
 .visually-hidden {
@@ -890,4 +896,8 @@ button.button--small {
   width: 12px;
   height: 12px;
   border-radius: 3px;
+}
+
+.setting__number {
+  width: 7em;
 }

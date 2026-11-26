@@ -155,3 +155,33 @@ describe("アップロードされた PNG の検査", () => {
     expect(parsePngSize(new Uint8Array([1, 2, 3]))).toBeNull();
   });
 });
+
+describe("設定の種類: 数値と選択肢", () => {
+  const num: SettingDef = { key: "target", label: "目安", scope: "shared", type: "number", default: null, unit: "ml", min: 50, max: 3000 };
+  const sel: SettingDef = {
+    key: "mode",
+    label: "対象",
+    scope: "shared",
+    type: "select",
+    default: "off",
+    options: [
+      { value: "off", label: "なし" },
+      { value: "both", label: "両方" },
+    ],
+  };
+
+  it("数値は範囲の中だけ。既定が null の項目は、未設定(null)に戻せる", async () => {
+    const { validateSettingValue } = await import("../src/core/shared/settings");
+    expect(validateSettingValue(num, 800)).toEqual({ ok: true, value: 800 });
+    expect(validateSettingValue(num, null)).toEqual({ ok: true, value: null });
+    expect(validateSettingValue(num, 10).ok).toBe(false);
+    expect(validateSettingValue(num, "800").ok).toBe(false);
+    expect(validateSettingValue({ ...num, default: 20 } as SettingDef, null).ok).toBe(false);
+  });
+
+  it("選択肢は、宣言したものだけ", async () => {
+    const { validateSettingValue } = await import("../src/core/shared/settings");
+    expect(validateSettingValue(sel, "both")).toEqual({ ok: true, value: "both" });
+    expect(validateSettingValue(sel, "other").ok).toBe(false);
+  });
+});
