@@ -32,6 +32,7 @@ import { registerHomeRoutes } from "./routes/home-routes";
 import { registerSettingsRoutes } from "./routes/settings-routes";
 import { LAST_CRON_KEY } from "./scheduler";
 import { featureSettings, type SettingsNamespace } from "./settings";
+import { ownedSources, sharedData } from "./data";
 
 export interface RegisteredFeatureServer {
   meta: FeatureMeta;
@@ -275,6 +276,7 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
         user: c.get("user"),
         feature: meta,
         settings: featureSettings(c.env.DB, deps.registry, meta.id),
+        data: sharedData(c.env.DB, ownedSources(meta)),
       });
       await next();
     });
@@ -299,7 +301,7 @@ async function serveFrontend(c: AppContext, targets: ReturnType<typeof pwaTarget
     // sw.js、画像、スクリプトなど(ページを開くリクエスト以外)は、そのまま静的ファイルとして返す
     return c.env.ASSETS.fetch(c.req.raw);
   }
-  // "/piyolog" → "/piyolog/"(末尾のスラッシュをそろえる)
+  // "/<機能ID>" → "/<機能ID>/"(末尾のスラッシュをそろえる)
   const segments = url.pathname.split("/").filter(Boolean);
   if (segments.length === 1 && !url.pathname.endsWith("/")) {
     return c.redirect(`${url.pathname}/${url.search}`, 301);

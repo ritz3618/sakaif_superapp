@@ -15,4 +15,53 @@ export default defineFeature({
     { type: "diaper_due", label: "おむつ替えの経過時間" },
     { type: "feed_expiring", label: "フィードURLの期限" },
   ],
+  // 育児の記録は、ほかの機能でも使えるよう共通データに置く(2026-11-26 ユーザー決定)。
+  // 中身: kind = 公式仕様の type(Formula、Sleep、Pee など)、value/unit = 量や体温など、
+  //       note = メモ、payload = フィードの記録の JSON そのまま、id = event_id。
+  dataSources: [
+    {
+      id: "piyolog",
+      label: "ぴよログの記録",
+      description: "ぴよログのデータフィードから取得した育児の記録(授乳、睡眠、おむつ、体温など)",
+    },
+  ],
+  settings: [
+    {
+      key: "feedingIntervalMinutes",
+      label: "授乳の通知の間隔",
+      description: "最後の授乳(飲み始め)からこの時間がたったら、通知します(夫婦共通)。",
+      scope: "shared",
+      type: "minutes",
+      default: 240,
+      min: 30,
+      max: 720,
+    },
+    {
+      key: "diaperIntervalMinutes",
+      label: "おむつ替えの通知の間隔",
+      description: "最後のおしっこ・うんちの記録からこの時間がたったら、通知します(夫婦共通)。",
+      scope: "shared",
+      type: "minutes",
+      default: 240,
+      min: 30,
+      max: 720,
+    },
+    {
+      key: "feedUrl",
+      label: "フィードURL",
+      description:
+        "ぴよログの「設定 → データフィード」で作ったURLを貼り付けます。URLはパスワードと同じ扱いで、保存後は画面に表示しません。",
+      scope: "shared",
+      type: "secret",
+    },
+    {
+      key: "feedCreatedOn",
+      label: "フィードの作成日(任意)",
+      description:
+        "フィードの期限(作成日から89日)の計算に使います。入れない場合は、URLを保存した日を作成日とみなします。",
+      scope: "shared",
+      type: "date",
+      default: null,
+    },
+  ],
 });

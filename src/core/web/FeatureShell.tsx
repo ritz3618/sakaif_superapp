@@ -30,7 +30,8 @@ export function FeatureShell({
   return (
     <div className="page">
       <Header title={feature.name} showHome />
-      <main className="feature">
+      {/* data-feature と --feature-color で、機能ごとの見た目の調整を、この機能の画面の中だけに限る */}
+      <main className="feature" data-feature={feature.id} style={{ ["--feature-color" as string]: feature.color }}>
         <Suspense fallback={<p className="message">読み込み中…</p>}>
           <Screen feature={feature} apiFetch={featureApi} subPath={subPath} />
         </Suspense>

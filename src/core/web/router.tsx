@@ -1,7 +1,7 @@
 /**
  * 画面の切り替え。
- * 同じ PWA の中(例: 育児ログの画面どうし)は、ページを読み直さずに切り替える。
- * 別の PWA に移るとき(ホーム → 育児ログなど)は、ページを読み直す。
+ * 同じ PWA の中(例: ある機能の画面どうし)は、ページを読み直さずに切り替える。
+ * 別の PWA に移るとき(ホーム → 機能など)は、ページを読み直す。
  * iPhone は「ホーム画面に追加」した時点の HTML からアイコンと名前を読むため、
  * 画面ごとに正しい manifest が HTML に入っている必要があるから。
  */
@@ -22,7 +22,7 @@ export function usePath(): string {
   return useSyncExternalStore(subscribe, () => window.location.pathname);
 }
 
-/** パスがどの PWA に属するか("/piyolog/..." → "piyolog"、それ以外 → "app") */
+/** パスがどの PWA に属するか("/<機能ID>/..." → その機能ID、それ以外 → "app") */
 export function pwaTargetOf(pathname: string, featureIds: readonly string[]): string {
   const first = pathname.split("/")[1] ?? "";
   return featureIds.includes(first) ? first : "app";

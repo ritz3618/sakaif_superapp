@@ -56,6 +56,7 @@ describe("マイグレーション", () => {
       "core/0001_init.sql",
       "core/0002_push_app_context.sql",
       "core/0003_settings_notifications_jobs.sql",
+      "core/0004_shared_records.sql",
     ]);
     const statements = splitSqlStatements(coreMigrations[0]!.sql);
     expect(statements).toHaveLength(5);

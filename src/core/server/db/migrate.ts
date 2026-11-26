@@ -8,7 +8,7 @@
  */
 
 export interface Migration {
-  /** 例: "core/0001_init.sql"、"piyolog/0001_init.sql" */
+  /** 例: "core/0001_init.sql"、"<機能のフォルダ名>/0001_init.sql" */
   id: string;
   sql: string;
 }

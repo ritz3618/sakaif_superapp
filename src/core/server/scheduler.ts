@@ -9,6 +9,7 @@ import type { RegisteredFeatureServer } from "./app";
 import type { Env } from "./env";
 import { kvSet } from "./kv";
 import { CORE_ERROR_TYPE, CORE_FEATURE_ID, notify, pruneNotificationLog } from "./notify";
+import { ownedSources, sharedData } from "./data";
 import { featureSettings, type SettingsNamespace } from "./settings";
 
 export const LAST_CRON_KEY = "last_cron_at";
@@ -65,6 +66,7 @@ export async function runScheduled(
         feature: meta,
         scheduledAt,
         settings: featureSettings(db, registry, meta.id),
+        data: sharedData(db, ownedSources(meta)),
         notify: (request) => notify(deps, { ...request, featureId: meta.id }),
       });
       await recordSuccess(db, meta.id, new Date().toISOString());

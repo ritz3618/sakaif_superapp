@@ -8,10 +8,19 @@ import { FEATURE_NOTIFY_KEY, validateSettingDefs, type SettingDef } from "./sett
 export type FeatureKind = "internal" | "external";
 
 export interface FeatureNotificationType {
-  /** 機能の中で一意な通知の種類(例: "feeding_due") */
+  /** 機能の中で一意な通知の種類(例: "reminder_due") */
   type: string;
   /** 設定画面や履歴に出す名前 */
   label: string;
+}
+
+/** 共通データ(core_records)の出どころの宣言。宣言した機能だけが書き込める。読み出しはどの機能からもできる。 */
+export interface FeatureDataSource {
+  /** アプリ全体で一意な名前(英小文字・数字・._-) */
+  id: string;
+  /** 表示名(例: 「ぴよログの記録」) */
+  label: string;
+  description?: string;
 }
 
 export interface FeatureMeta {
@@ -33,7 +42,11 @@ export interface FeatureMeta {
   notifications?: FeatureNotificationType[];
   /** この機能の設定項目。宣言すると、設定画面に自動で出る。 */
   settings?: SettingDef[];
+  /** この機能が書き込む共通データの出どころ(ほかの機能と使い回したいデータ) */
+  dataSources?: FeatureDataSource[];
 }
+
+const DATA_SOURCE_PATTERN = /^[a-z][a-z0-9._-]{1,40}$/;
 
 /** 機能のIDに使えない名前(共通部分がパスとして使っているもの) */
 export const RESERVED_FEATURE_IDS: readonly string[] = [
@@ -55,7 +68,7 @@ export function defineFeature<T extends FeatureMeta | FeatureMeta[]>(definition:
   return definition;
 }
 
-/** 機能のホームのパス(例: "/piyolog/") */
+/** 機能のホームのパス(例: "/<機能ID>/") */
 export function featurePath(id: string): string {
   return `/${id}/`;
 }
@@ -64,6 +77,15 @@ export function featurePath(id: string): string {
 export function validateFeatures(features: readonly FeatureMeta[]): string[] {
   const errors: string[] = [];
   const seen = new Set<string>();
+  const sources = new Map<string, string>();
+  for (const f of features) {
+    for (const ds of f.dataSources ?? []) {
+      if (!DATA_SOURCE_PATTERN.test(ds.id)) errors.push(`機能 "${f.id}" の共通データの名前 "${ds.id}" は英小文字で始めてください`);
+      const owner = sources.get(ds.id);
+      if (owner) errors.push(`共通データ "${ds.id}" を、機能 "${owner}" と "${f.id}" の両方が宣言しています`);
+      sources.set(ds.id, f.id);
+    }
+  }
   for (const f of features) {
     if (!FEATURE_ID_PATTERN.test(f.id)) {
       errors.push(`機能ID "${f.id}" は、英小文字で始まる英小文字・数字(2〜31文字)にしてください`);

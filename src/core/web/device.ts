@@ -25,7 +25,7 @@ export function captureLaunchSource(): void {
   window.history.replaceState(null, "", url.pathname + url.search + url.hash);
 }
 
-/** どのアイコンのアプリとして動いているか("app"、"piyolog" など)。ブラウザや不明のときは null。 */
+/** どのアイコンのアプリとして動いているか(本体なら "app"、機能単体ならその機能ID)。ブラウザや不明のときは null。 */
 export function launchSource(): string | null {
   if (!isStandalone()) return null;
   for (const storage of [localStorage, sessionStorage]) {

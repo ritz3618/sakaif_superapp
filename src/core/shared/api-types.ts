@@ -9,7 +9,7 @@ export interface HomeCard {
   id: string;
   name: string;
   kind: "internal" | "external";
-  /** internal: "/piyolog/" など / external: 外部のURL */
+  /** internal: "/<機能ID>/" / external: 外部のURL */
   href: string;
   iconUrl: string;
   color: string;

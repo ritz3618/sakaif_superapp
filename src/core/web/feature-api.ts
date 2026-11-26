@@ -7,12 +7,14 @@ import type { FeatureMeta } from "../shared/feature";
 
 export { Link, navigate } from "./router";
 export { ApiError } from "./api";
+/** 共通の見た目の部品(これを使うと、アプリ全体の見た目のテイストがそろう) */
+export { BigValue, Button, Note, Panel, Stat, StatGrid, Trend, type TrendDirection } from "./ui";
 
 export interface FeatureScreenProps {
   feature: FeatureMeta;
   /** この機能のAPI(/api/f/<機能ID>/...)を呼ぶ。path は "/summary" のように書く。 */
   apiFetch(path: string, init?: RequestInit): Promise<Response>;
-  /** 機能の中でのパス("/piyolog/graph/" なら "/graph/") */
+  /** 機能の中でのパス("/<機能ID>/graph/" なら "/graph/") */
   subPath: string;
 }
 

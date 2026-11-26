@@ -67,6 +67,22 @@ export async function readSetting(
   return row ? (JSON.parse(row.value) as SettingValue) : defaultValue(def);
 }
 
+/** 1つの設定の値と、保存した時刻を読む(保存されていなければ既定値と null)。 */
+export async function readSettingWithMeta(
+  db: D1Database,
+  namespace: string,
+  def: SettingDef,
+  userId: number | null,
+): Promise<{ value: SettingValue; updatedAt: string | null }> {
+  const row = await db
+    .prepare("SELECT value, updated_at FROM core_settings WHERE namespace = ? AND key = ? AND user_id = ?")
+    .bind(namespace, def.key, ownerId(def, userId))
+    .first<{ value: string; updated_at: string }>();
+  return row
+    ? { value: JSON.parse(row.value) as SettingValue, updatedAt: row.updated_at }
+    : { value: defaultValue(def), updatedAt: null };
+}
+
 /** ユーザーごとの設定を、複数のユーザーについてまとめて読む(通知の送り先を決めるときに使う)。 */
 export async function readUserSettingForUsers(
   db: D1Database,
@@ -148,14 +164,18 @@ export async function settingSectionsForUser(
 export interface FeatureSettings {
   /** 夫婦共通の設定、または userId を指定してユーザーごとの設定を読む。秘密の値も読める(サーバー側だけ)。 */
   get(key: string, userId?: number): Promise<SettingValue>;
+  /** 値と、保存した時刻(未保存なら null)を読む。秘密の値を保存した日を知りたいときなどに使う。 */
+  getWithMeta(key: string, userId?: number): Promise<{ value: SettingValue; updatedAt: string | null }>;
 }
 
 export function featureSettings(db: D1Database, registry: readonly SettingsNamespace[], namespace: string): FeatureSettings {
+  const defOf = (key: string) => {
+    const def = findSettingDef(registry, namespace, key);
+    if (!def) throw new Error(`設定 "${namespace}.${key}" は宣言されていません`);
+    return def;
+  };
   return {
-    async get(key, userId) {
-      const def = findSettingDef(registry, namespace, key);
-      if (!def) throw new Error(`設定 "${namespace}.${key}" は宣言されていません`);
-      return readSetting(db, namespace, def, userId ?? null);
-    },
+    get: (key, userId) => readSetting(db, namespace, defOf(key), userId ?? null),
+    getWithMeta: (key, userId) => readSettingWithMeta(db, namespace, defOf(key), userId ?? null),
   };
 }

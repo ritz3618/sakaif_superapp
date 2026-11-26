@@ -8,7 +8,7 @@ import { buildPushRequest, createVapidJwt, generateVapidKeys, type VapidKeys } f
 export interface NotificationPayload {
   title: string;
   body: string;
-  /** 通知をタップしたときに開くパス(例: "/piyolog/") */
+  /** 通知をタップしたときに開くパス(例: "/<機能ID>/") */
   url?: string;
   /** 同じ tag の通知は、端末上で新しいものに置き換わる */
   tag?: string;

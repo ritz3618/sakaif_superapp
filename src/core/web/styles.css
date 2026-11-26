@@ -1,4 +1,21 @@
 :root {
+  /* ---- 共通の値(デザインの基準)。機能は [data-feature="<機能ID>"] の中でだけ上書きできる ---- */
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --font-xs: 12px;
+  --font-sm: 13px;
+  --font-md: 15px;
+  --font-lg: 20px;
+  --font-xl: 26px;
+  /* 機能の色(各機能の画面では、その機能の color に置き換わる) */
+  --feature-color: #3d5a80;
+  /* 増えた・減ったの色(良し悪しではないので、赤・緑は使わない) */
+  --trend-more: #d9480f;
+  --trend-less: #1c7ed6;
   --bg: #f5f6f8;
   --surface: #ffffff;
   --text: #1c1f24;
@@ -23,6 +40,8 @@
     --accent-text: #0f1a28;
     --danger: #f2b8b5;
     --warn-bg: #3a2e16;
+    --trend-more: #ffa94d;
+    --trend-less: #74c0fc;
   }
 }
 
@@ -588,4 +607,73 @@ button.button--small {
 
 .file-button input {
   display: none;
+}
+
+/* ---- 共通の見た目の部品(core/web/ui.tsx) ---- */
+.ui-panel__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 見出しの前の小さな印に、機能の色を使う(機能ごとの個性を、テイストを崩さずに出す) */
+.ui-panel__title::before {
+  content: "";
+  width: 6px;
+  height: 1em;
+  border-radius: 3px;
+  background: var(--feature-color);
+}
+
+.ui-big {
+  font-size: var(--font-xl);
+  font-weight: 700;
+  margin: 2px 0 var(--space-1);
+}
+
+.ui-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.ui-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.ui-stat__label {
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+
+.ui-stat__value {
+  font-size: var(--font-lg);
+  font-weight: 700;
+}
+
+.ui-stat .note {
+  margin: 0;
+}
+
+.ui-trend {
+  font-size: var(--font-xs);
+  font-weight: 600;
+}
+
+.ui-trend--more {
+  color: var(--trend-more);
+}
+
+.ui-trend--less {
+  color: var(--trend-less);
+}
+
+.ui-trend--same {
+  color: var(--muted);
 }

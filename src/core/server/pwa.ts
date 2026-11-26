@@ -55,7 +55,7 @@ export function pwaTargets(features: readonly FeatureMeta[]): PwaTarget[] {
   return [app, ...internal];
 }
 
-/** パスから、どの PWA の画面かを決める("/piyolog/..." → piyolog、それ以外 → 本体)。 */
+/** パスから、どの PWA の画面かを決める("/<機能ID>/..." → その機能、それ以外 → 本体)。 */
 export function targetForPath(pathname: string, targets: readonly PwaTarget[]): PwaTarget {
   const first = pathname.split("/")[1] ?? "";
   const found = targets.find((t) => !t.isApp && t.id === first);
