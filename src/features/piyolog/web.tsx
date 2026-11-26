@@ -255,7 +255,7 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
 
       <p className="note piyolog-footnote">
         {sameTime || fullDay
-          ? `「ふだん」は過去${fullDay?.days ?? 0}日の平均です。「今の時刻まで」は各日の0時から同じ時刻まで、「1日」は各日の1日分と比べます(今日は途中なので、1日の行は少なく出ます)。量と睡眠が、ふだんの85%を下回ると「少なめ」と表示します。`
+          ? `「ふだん」は過去${fullDay?.days ?? 0}日の平均です。「今の時刻まで」は各日の0時から同じ時刻まで、「1日」は各日の1日分と比べます(今日は途中なので、1日の行は少なく出ます)。量と睡眠が、ふだんより少ないと「少なめ」と表示します。`
           : "比べられる過去の記録が、まだありません(記録がそろった日から比べます)。"}
         {target !== null && ` 授乳の1日の量は、設定の目安(${formatMl(target)})と比べます。`}
       </p>
@@ -289,7 +289,7 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
           </Note>
         )}
         <Link href={dataLink} className="piyolog-link">
-          データの管理(取り込み・CSV) ›
+          データの管理(取り込み・CSV・室温の設定の確認) ›
         </Link>
       </Panel>
     </div>

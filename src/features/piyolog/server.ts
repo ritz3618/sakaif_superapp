@@ -1,11 +1,14 @@
 /**
  * 育児ログ(ぴよログのデータを使う機能)のサーバー側。
  * - 5分おきにフィードを取得して保存し、授乳・おむつ替え・フィードの期限の通知を判定する。
+ * - 室温・湿度(SwitchBot)も5分おきに読んで共通データに保存し、基準の外が続いたら通知する(通知は初期値オフ)。
  * - 画面用の API: GET /summary、POST /refresh(今すぐ取得)、GET /data-info、POST /import(月ごとのテキストの取り込み)、
- *   GET /export.csv
+ *   GET /export.csv、GET /room(室温・湿度の状態)、GET /room/devices(SwitchBot の機器の確認)
  */
 import { defineFeatureServer, featureContext, formatMinutesFromIso } from "./server/helpers";
-import { readSyncState } from "./server/repo";
+import { readRoomState, readSyncState } from "./server/repo";
+import { buildRoomSummary, checkDevices, fetchReading } from "./server/room";
+import { SwitchBotError } from "./server/switchbot";
 import { recordsToCsv } from "./server/csv";
 import { importMonthlyText } from "./server/import";
 import { buildDataInfo, buildSummary, feedConfig, importCutoff, runScheduledJob, syncFeed } from "./server/service";
@@ -29,16 +32,12 @@ export default defineFeatureServer({
       const ctx = featureContext(c);
       const config = await feedConfig(ctx.settings);
       if (!config.url) return c.json({ error: "フィードURLが設定されていません" }, 400);
-      const state = await readSyncState(ctx.db);
+      const [state, roomState] = await Promise.all([readSyncState(ctx.db), readRoomState(ctx.db)]);
       const now = new Date();
-      if (state.lastAttemptAt && now.getTime() - Date.parse(state.lastAttemptAt) < MANUAL_REFRESH_INTERVAL_MS) {
-        return c.json(await buildSummary(ctx.db, ctx.data, ctx.settings, now));
-      }
-      try {
-        await syncFeed(ctx.db, ctx.data, config.url, now);
-      } catch {
-        // 失敗の理由は、まとめの sync.lastError に入っている
-      }
+      const due = (at: string | undefined) => !at || now.getTime() - Date.parse(at) >= MANUAL_REFRESH_INTERVAL_MS;
+      // 失敗の理由は、まとめ(sync.lastError、室温・湿度の状態)に入っている
+      if (due(state.lastAttemptAt)) await syncFeed(ctx.db, ctx.data, config.url, now).catch(() => undefined);
+      if (due(roomState.lastAttemptAt)) await fetchReading(ctx.db, ctx.data, ctx.settings, now).catch(() => undefined);
       return c.json(await buildSummary(ctx.db, ctx.data, ctx.settings, new Date()));
     });
 
@@ -58,6 +57,21 @@ export default defineFeatureServer({
         return c.json(await importMonthlyText(ctx.data, text, await importCutoff(ctx.db, new Date())));
       } catch (error) {
         if (error instanceof TextImportError) return c.json({ error: error.message }, 400);
+        throw error;
+      }
+    });
+
+    app.get("/room", async (c) => {
+      const ctx = featureContext(c);
+      return c.json(await buildRoomSummary(ctx.db, ctx.data, ctx.settings, new Date()));
+    });
+
+    app.get("/room/devices", async (c) => {
+      const ctx = featureContext(c);
+      try {
+        return c.json(await checkDevices(ctx.settings));
+      } catch (error) {
+        if (error instanceof SwitchBotError) return c.json({ error: error.message }, 400);
         throw error;
       }
     });

@@ -6,6 +6,8 @@
 
 /** 共通データ(core_records)での、この機能の記録の出どころの名前 */
 export const PIYOLOG_SOURCE = "piyolog";
+/** 共通データでの、室温・湿度(SwitchBot)の出どころの名前 */
+export const ROOM_SOURCE = "switchbot";
 
 /** 授乳として数える種類 */
 export const FEEDING_TYPES = ["Formula", "ExpressedBreastMilk", "BreastFeeding"] as const;

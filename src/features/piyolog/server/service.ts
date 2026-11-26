@@ -5,10 +5,13 @@
 import type { DataRecord, DataRecordInput, FeatureJobContext, FeatureSettings, SharedData } from "../../../core/server/feature-api";
 import { DAY_MS, MINUTE_MS, jstDate, jstStartOfDay } from "../../../core/shared/time";
 import type { LatestValue, PiyologDataInfo, PiyologSummary } from "../shared/api";
-import { DIAPER_TYPES, FEEDING_TYPES, PIYOLOG_SOURCE, SLEEP_TYPE, WAKE_TYPE } from "../shared/records";
+import { DIAPER_TYPES, FEEDING_TYPES, PIYOLOG_SOURCE, ROOM_SOURCE, SLEEP_TYPE, WAKE_TYPE } from "../shared/records";
 import { diaperAlert, expiryAlert, feedExpiry, feedingAlert, type LastRecord } from "./alerts";
 import { FeedError, fetchFeed, type Feed, type FeedRecord } from "./feed";
 import { readSyncState, writeSyncState } from "./repo";
+import type { Thresholds } from "../shared/room-api";
+import { evaluate } from "../shared/room-thresholds";
+import { roomThresholds, runRoomJob } from "./room";
 import { computeStats, computeTimeline } from "./stats";
 
 /** 429 を受けたあと、取得を控える時間 */
@@ -91,8 +94,21 @@ function toLast(record: DataRecord | null): LastRecord | null {
     : null;
 }
 
-/** 5分おきの定期実行。フィードURLが未設定なら、何もしない(失敗ではない)。 */
+/** 5分おきの定期実行。フィードと室温・湿度は、片方が失敗しても、もう片方は行う(失敗はまとめて報告する)。 */
 export async function runScheduledJob(ctx: FeatureJobContext): Promise<void> {
+  const errors: string[] = [];
+  for (const job of [runFeedJob, runRoomJob]) {
+    try {
+      await job(ctx);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (errors.length > 0) throw new Error(errors.join(" / "));
+}
+
+/** フィードの取得と通知。フィードURLが未設定なら、何もしない(失敗ではない)。 */
+async function runFeedJob(ctx: FeatureJobContext): Promise<void> {
   const config = await feedConfig(ctx.settings);
   if (!config.url) return;
   const now = new Date();
@@ -126,22 +142,13 @@ export async function runScheduledJob(ctx: FeatureJobContext): Promise<void> {
   }
 }
 
-/** 室温・湿度の機能が共通データに置いている値の出どころ(読むだけ) */
-const ROOM_SOURCE = "switchbot";
-
-function roomOf(temp: DataRecord | null, hum: DataRecord | null): PiyologSummary["room"] {
+/** 室温・湿度の最新の値と、今の基準との比較 */
+function roomOf(temp: DataRecord | null, hum: DataRecord | null, t: Thresholds): PiyologSummary["room"] {
   if (!temp && !hum) return null;
   const warnings: NonNullable<PiyologSummary["room"]>["warnings"] = [];
   for (const [metric, r] of [["temperature", temp], ["humidity", hum]] as const) {
-    if (!r?.payload) continue;
-    try {
-      const w = (JSON.parse(r.payload) as { warning?: { direction?: unknown; threshold?: unknown } | null }).warning;
-      if (w && (w.direction === "low" || w.direction === "high") && typeof w.threshold === "number") {
-        warnings.push({ metric, direction: w.direction, threshold: w.threshold });
-      }
-    } catch {
-      // 読めなければ注意なし
-    }
+    const w = r?.value != null ? evaluate(metric, r.value, t) : null;
+    if (w) warnings.push({ metric, direction: w.direction, threshold: w.threshold });
   }
   const at = [temp?.recordedAt, hum?.recordedAt].filter((x): x is string => !!x).sort().at(-1)!;
   return { at, temperature: temp?.value ?? null, humidity: hum?.value ?? null, warnings };
@@ -160,7 +167,7 @@ export async function buildSummary(
   const config = await feedConfig(settings);
   // 過去7日と、7日前の夜からの睡眠のため、8日前の0時から読む
   const since = new Date(jstStartOfDay(now).getTime() - 8 * DAY_MS).toISOString();
-  const [state, rows, earliest, interval, target, lastFeeding, lastPee, lastPoop, temperature, weight, height, bath, roomTemp, roomHum] =
+  const [state, rows, earliest, interval, target, lastFeeding, lastPee, lastPoop, temperature, weight, height, bath, roomTemp, roomHum, roomT] =
     await Promise.all([
       readSyncState(db),
       data.query(PIYOLOG_SOURCE, { from: since }),
@@ -176,6 +183,7 @@ export async function buildSummary(
       data.latest(PIYOLOG_SOURCE, ["Bath"]),
       data.latest(ROOM_SOURCE, ["temperature"]),
       data.latest(ROOM_SOURCE, ["humidity"]),
+      roomThresholds(settings),
     ]);
   const records = rows.map((r) => ({ type: r.kind, at: Date.parse(r.recordedAt), value: r.value, unit: r.unit }));
   const earliestAt = earliest ? Date.parse(earliest) : null;
@@ -221,7 +229,7 @@ export async function buildSummary(
       height: toLatest(height),
       bath: toLatest(bath),
     },
-    room: roomOf(roomTemp, roomHum),
+    room: roomOf(roomTemp, roomHum, roomT),
     timeline: computeTimeline(records, now.getTime(), earliestAt),
     expiry: config.createdOn ? { createdOn: config.createdOn, ...feedExpiry(config.createdOn, now.getTime()) } : null,
   };

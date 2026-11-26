@@ -10,6 +10,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, FileButton, Link, Note, Panel, type FeatureScreenProps } from "../../../core/web/feature-api";
 import { jstDate, jstTime } from "../../../core/shared/time";
 import type { ImportResult, PiyologDataInfo } from "../shared/api";
+import type { DeviceCheck, RoomSummary, Thresholds } from "../shared/room-api";
+import { warningText } from "../shared/room-thresholds";
 import { countByLabel, parseMonthlyText, splitByDays, TextImportError, type ParsedMonth } from "../shared/text-import";
 import { shortDate, timeOf } from "./time";
 
@@ -219,6 +221,94 @@ function ImportPanel({
   );
 }
 
+function range(low: number | null, high: number | null, unit: string): string {
+  if (low === null && high === null) return "設定なし";
+  if (high === null) return `${low}${unit}以上`;
+  if (low === null) return `${high}${unit}以下`;
+  return `${low}〜${high}${unit}`;
+}
+
+function thresholdText(t: Thresholds): string {
+  return `基準: 室温 ${range(t.temperatureLow, t.temperatureHigh, "℃")}、湿度 ${range(t.humidityLow, t.humidityHigh, "%")}`;
+}
+
+/** 室温・湿度(SwitchBot)の状態と、機器の確認 */
+function RoomPanel({ apiFetch }: Pick<FeatureScreenProps, "apiFetch">) {
+  const [room, setRoom] = useState<RoomSummary | null>(null);
+  const [check, setCheck] = useState<DeviceCheck | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    apiFetch("/room")
+      .then(async (res) => setRoom((await res.json()) as RoomSummary))
+      .catch((e: unknown) => setError(errorText(e)));
+  }, [apiFetch]);
+
+  const runCheck = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setCheck((await (await apiFetch("/room/devices")).json()) as DeviceCheck);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!room) return null;
+  return (
+    <Panel title="室温・湿度(SwitchBot)">
+      {!room.configured ? (
+        <Note>
+          SwitchBot のトークンとクライアントシークレットを、設定画面の「育児ログ」に保存すると、5分おきに室温と湿度を読みます。2つの値は、SwitchBot のアプリの「プロフィール → 設定 → アプリについて」で、アプリのバージョンを10回たたくと出る「開発者向けオプション」にあります。値はチャットなどに貼らないでください。
+        </Note>
+      ) : (
+        <>
+          <Note>
+            {room.reading
+              ? `${timeOf(room.reading.at)}の値: 室温 ${room.reading.temperature}℃、湿度 ${room.reading.humidity}%`
+              : "まだ値がありません(5分以内に読みます)。"}
+            {room.device && `(${room.device.name})`}
+          </Note>
+          {room.warnings.map((w) => (
+            <Note key={w.metric} tone="warn">
+              ⚠ {warningText(w)}
+            </Note>
+          ))}
+          {room.sync.lastError && room.sync.lastAttemptAt !== room.sync.lastSuccessAt && (
+            <Note tone="error">最後の取得に失敗しました: {room.sync.lastError}</Note>
+          )}
+          <Note>{thresholdText(room.thresholds)}(基準と通知は、設定画面の「育児ログ」で変えられます)</Note>
+          <Button variant="secondary" disabled={busy} onClick={runCheck}>
+            {busy ? "確認中…" : "SwitchBot の機器を確認する"}
+          </Button>
+        </>
+      )}
+      {check && (
+        <ul className="piyolog-devices">
+          {check.devices.map((d, i) => (
+            <li key={i}>
+              <strong>{d.name}</strong>
+              <span className="note">
+                {d.type}
+                {d.isMeter && " / 温湿度を読める機器"}
+                {d.isMeter && (d.isHub ? " / ハブ本体" : ` / ハブ経由: ${d.viaHub ? "はい" : "いいえ"}`)}
+                {d.isMeter && d.cloud !== null && ` / クラウド: ${d.cloud ? "有効" : "無効"}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {check && check.devices.every((d) => !d.isMeter) && (
+        <Note tone="warn">温湿度を読める機器が見つかりませんでした(機器 {check.devices.length}台)。</Note>
+      )}
+      {error && <Note tone="error">{error}</Note>}
+    </Panel>
+  );
+}
+
 export default function DataPage({ apiFetch, feature }: FeatureScreenProps) {
   const [info, setInfo] = useState<PiyologDataInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -265,6 +355,7 @@ export default function DataPage({ apiFetch, feature }: FeatureScreenProps) {
           </Panel>
           <ImportPanel apiFetch={apiFetch} info={info} onDone={load} />
           <CsvPanel key={info.stored.count} apiFetch={apiFetch} info={info} />
+          <RoomPanel apiFetch={apiFetch} />
         </>
       )}
     </div>

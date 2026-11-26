@@ -226,20 +226,20 @@ describe("表示", () => {
     expect([formatMinutes(45), formatMinutes(240), formatMinutes(250)]).toEqual(["45分", "4時間", "4時間10分"]);
   });
 
-  it("過去との比較の書き方(差が小さければ「ほぼ同じ」)", () => {
+  it("過去との比較は、数値そのものを比べる(画面の単位にそろえて、差が0なら「同じ」)", () => {
     expect(compare(520, 460, "ml")).toEqual({ direction: "more", diffText: "+60ml" });
     expect(compare(5, 6, "count")).toEqual({ direction: "less", diffText: "-1回" });
-    expect(compare(480, 475, "minutes").direction).toBe("same");
+    expect(compare(480, 475, "minutes")).toEqual({ direction: "more", diffText: "+5分" });
     expect(compare(450, 480, "minutes")).toEqual({ direction: "less", diffText: "-30分" });
+    expect(compare(508.6, 508.6, "ml")).toEqual({ direction: "same", diffText: "同じ" });
+    expect(compare(4, 4.04, "count").direction).toBe("same");
   });
 
-  it("「少なめ」は、ふだんの85%未満で、差が量30ml・睡眠30分以上のとき", () => {
-    expect(isShort(600, 720, "ml")).toBe(true); // 83%
-    expect(isShort(620, 720, "ml")).toBe(false); // 86%
-    expect(isShort(20, 60, "ml")).toBe(true); // 33%、差40ml
-    expect(isShort(0, 25, "ml")).toBe(false); // 差が30ml未満(0時すぎなど、まだ量が少ない時間帯)
-    expect(isShort(400, 480, "minutes")).toBe(true); // 83%、差80分
-    expect(isShort(0, 0, "minutes")).toBe(false);
+  it("「少なめ」は、ふだんより少ないとき(85%などの基準は使わない)", () => {
+    expect(isShort(700, 720, "ml")).toBe(true);
+    expect(isShort(720, 720, "ml")).toBe(false);
+    expect(isShort(719.6, 720, "ml")).toBe(false); // 画面では同じ720ml
+    expect(isShort(400, 401, "minutes")).toBe(true);
   });
 
   it("CSV は BOM 付き、日本時間、カンマや引用符を含むメモも正しく書く。取り込んだ記録は、書き出しの名前と取得元を出す", () => {

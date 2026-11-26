@@ -54,6 +54,11 @@ export function isMeterType(type: string): boolean {
   return /meter|woiosensor|hub 2|hub 3/i.test(type);
 }
 
+/** ハブ本体か */
+export function isHubType(type: string): boolean {
+  return /^hub/i.test(type);
+}
+
 /** ハブを通っているか("000000000000" や空はハブなし) */
 export function viaHub(device: SwitchBotDevice): boolean {
   return !!device.hubDeviceId && !/^0+$/.test(device.hubDeviceId);

@@ -1,5 +1,5 @@
 /** 基準(下限・上限)との比較(サーバーと画面の両方で使う。テストで確認している)。 */
-import type { Metric, Thresholds, Warning } from "./api";
+import type { Metric, Thresholds, Warning } from "./room-api";
 
 export function evaluate(metric: Metric, value: number, t: Thresholds): Warning | null {
   const low = metric === "temperature" ? t.temperatureLow : t.humidityLow;

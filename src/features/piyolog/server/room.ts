@@ -1,42 +1,43 @@
 /**
- * 取得、通知、画面用のまとめ。
- * 値は共通データ(source = "switchbot")に置き、使っている温湿度計と取得の状態だけを、この機能のテーブル(room_state)に置く。
+ * 室温・湿度(SwitchBot)の取得、通知、画面用のまとめ(育児ログの一部。2026-11-26 ユーザー決定)。
+ * 値は、ほかの機能でも使えるよう共通データ(source = "switchbot")に置き、
+ * 使っている機器と取得の状態だけを、この機能のテーブル(piyolog_state の "switchbot")に置く。
  */
 import type { DataRecordInput, FeatureJobContext, FeatureSettings, SharedData } from "../../../core/server/feature-api";
 import { DAY_MS, MINUTE_MS } from "../../../core/shared/time";
-import type { DeviceCheck, Metric, RoomSummary, Thresholds } from "../shared/api";
-import { evaluate } from "../shared/thresholds";
-import { alertMetrics, roomAlert } from "./alerts";
-import { readState, writeState, type RoomState } from "./repo";
-import { isMeterType, listDevices, meterStatus, SwitchBotError, viaHub, type Credentials } from "./switchbot";
+import { ROOM_SOURCE } from "../shared/records";
+import type { DeviceCheck, Metric, RoomSummary, Thresholds } from "../shared/room-api";
+import { evaluate } from "../shared/room-thresholds";
+import { readRoomState as readState, writeRoomState as writeState, type RoomState } from "./repo";
+import { alertMetrics, roomAlert } from "./room-alerts";
+import { isHubType, isMeterType, listDevices, meterStatus, SwitchBotError, viaHub, type Credentials } from "./switchbot";
 
-export const SWITCHBOT_SOURCE = "switchbot";
 const METRICS: readonly Metric[] = ["temperature", "humidity"];
 const UNITS: Record<Metric, string> = { temperature: "celsius", humidity: "percent" };
 
 export async function credentials(settings: FeatureSettings): Promise<Credentials | null> {
-  const [token, secret] = await Promise.all([settings.get("token"), settings.get("clientSecret")]);
+  const [token, secret] = await Promise.all([settings.get("switchbotToken"), settings.get("switchbotSecret")]);
   return typeof token === "string" && token && typeof secret === "string" && secret ? { token, secret } : null;
 }
 
-export async function thresholds(settings: FeatureSettings): Promise<Thresholds> {
+export async function roomThresholds(settings: FeatureSettings): Promise<Thresholds> {
   const [tl, th, hl, hh] = await Promise.all([
-    settings.get("temperatureLow"),
-    settings.get("temperatureHigh"),
-    settings.get("humidityLow"),
-    settings.get("humidityHigh"),
+    settings.get("roomTemperatureLow"),
+    settings.get("roomTemperatureHigh"),
+    settings.get("roomHumidityLow"),
+    settings.get("roomHumidityHigh"),
   ]);
   const num = (v: unknown) => (typeof v === "number" ? v : null);
   return { temperatureLow: num(tl), temperatureHigh: num(th), humidityLow: num(hl), humidityHigh: num(hh) };
 }
 
-/** 使う温湿度計を決める(名前の指定があればその名前、なければ最初の温湿度計) */
+/** 使う機器を決める(名前の指定があればその名前、なければ最初の温湿度を測れる機器) */
 async function chooseDevice(creds: Credentials, wanted: string, fetcher?: typeof fetch): Promise<NonNullable<RoomState["device"]>> {
   const meters = (await listDevices(creds, fetcher)).filter((d) => isMeterType(d.deviceType));
   const device = wanted ? meters.find((d) => d.deviceName === wanted) : meters[0];
   if (!device) {
     throw new SwitchBotError(
-      wanted ? `「${wanted}」という温湿度計が見つかりません` : "SwitchBot に温湿度計が見つかりません",
+      wanted ? `「${wanted}」という機器が見つかりません` : "SwitchBot に、温湿度を測れる機器が見つかりません",
       "not_found",
     );
   }
@@ -75,7 +76,7 @@ export async function fetchReading(
   const state = await readState(db);
   const at = now.toISOString();
   try {
-    const wanted = String((await settings.get("deviceName")) ?? "").trim();
+    const wanted = String((await settings.get("switchbotDeviceName")) ?? "").trim();
     let device = state.device && state.device.chosenFor === wanted ? state.device : await chooseDevice(creds, wanted, fetcher);
     let status;
     try {
@@ -86,7 +87,7 @@ export async function fetchReading(
       device = await chooseDevice(creds, wanted, fetcher);
       status = await meterStatus(creds, device.id, fetcher);
     }
-    await data.upsert(SWITCHBOT_SOURCE, toRecords(device, now, status, await thresholds(settings)));
+    await data.upsert(ROOM_SOURCE, toRecords(device, now, status, await roomThresholds(settings)));
     await writeState(db, { device, lastSuccessAt: at, lastAttemptAt: at, lastError: null });
     return true;
   } catch (error) {
@@ -96,22 +97,22 @@ export async function fetchReading(
   }
 }
 
-/** 5分おきの定期実行。トークンが未設定なら、何もしない(失敗ではない) */
-export async function runScheduledJob(ctx: FeatureJobContext): Promise<void> {
+/** 5分おきの定期実行の室温・湿度の部分。トークンが未設定なら、何もしない(失敗ではない) */
+export async function runRoomJob(ctx: FeatureJobContext): Promise<void> {
   const now = new Date();
   const fetched = await fetchReading(ctx.db, ctx.data, ctx.settings, now);
   if (!fetched) return;
   const [target, afterMinutes, t] = await Promise.all([
-    ctx.settings.get("alertTarget"),
-    ctx.settings.get("alertAfterMinutes"),
-    thresholds(ctx.settings),
+    ctx.settings.get("roomAlertTarget"),
+    ctx.settings.get("roomAlertAfterMinutes"),
+    roomThresholds(ctx.settings),
   ]);
   const metrics = alertMetrics(String(target));
   if (metrics.length === 0) return;
   // 続いている時間を数えるため、通知までの時間より少し長く読む
   const from = new Date(now.getTime() - ((afterMinutes as number) + 60) * MINUTE_MS).toISOString();
   for (const metric of metrics) {
-    const rows = await ctx.data.query(SWITCHBOT_SOURCE, { kinds: [metric], from });
+    const rows = await ctx.data.query(ROOM_SOURCE, { kinds: [metric], from });
     const readings = rows.filter((r) => r.value !== null).map((r) => ({ at: Date.parse(r.recordedAt), value: r.value! }));
     const alert = roomAlert(metric, readings, t, afterMinutes as number, now.getTime());
     if (!alert) continue;
@@ -127,13 +128,13 @@ export async function runScheduledJob(ctx: FeatureJobContext): Promise<void> {
   }
 }
 
-/** 画面に出すまとめ */
-export async function buildSummary(db: D1Database, data: SharedData, settings: FeatureSettings, now: Date): Promise<RoomSummary> {
+/** 画面に出すまとめ(データの管理の画面の「室温・湿度」) */
+export async function buildRoomSummary(db: D1Database, data: SharedData, settings: FeatureSettings, now: Date): Promise<RoomSummary> {
   const [creds, state, t, rows] = await Promise.all([
     credentials(settings),
     readState(db),
-    thresholds(settings),
-    data.query(SWITCHBOT_SOURCE, { from: new Date(now.getTime() - DAY_MS).toISOString(), order: "desc", limit: 20 }),
+    roomThresholds(settings),
+    data.query(ROOM_SOURCE, { from: new Date(now.getTime() - DAY_MS).toISOString(), order: "desc", limit: 20 }),
   ]);
   const latest = (metric: Metric) => rows.find((r) => r.kind === metric && r.value !== null);
   const temp = latest("temperature");
@@ -168,6 +169,7 @@ export async function checkDevices(settings: FeatureSettings, fetcher?: typeof f
       isMeter: isMeterType(d.deviceType),
       cloud: d.enableCloudService ?? null,
       viaHub: viaHub(d),
+      isHub: isHubType(d.deviceType),
     })),
   };
 }

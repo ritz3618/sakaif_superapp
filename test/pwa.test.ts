@@ -11,7 +11,7 @@ const targets = pwaTargets(features);
 
 describe("PWA(ホーム画面に追加)", () => {
   it("本体と、内部機能9個のそれぞれに manifest がある", () => {
-    expect(targets.map((t) => t.id)).toEqual(["app", "piyolog", "room", ...Array.from({ length: 7 }, (_, i) => `dummy${i + 1}`)]);
+    expect(targets.map((t) => t.id)).toEqual(["app", "piyolog", ...Array.from({ length: 8 }, (_, i) => `dummy${i + 1}`)]);
   });
 
   it("機能の manifest は、start_url がその機能、scope は全体(/)", () => {

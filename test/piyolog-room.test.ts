@@ -1,11 +1,11 @@
-/** 室温・湿度(SwitchBot)。トークンなどは架空の値。 */
+/** 育児ログの室温・湿度(SwitchBot)。トークンなどは架空の値。 */
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { alertMetrics, roomAlert } from "../src/features/room/server/alerts";
-import { toRecords } from "../src/features/room/server/service";
-import { isMeterType, listDevices, meterStatus, sign, SwitchBotError, viaHub } from "../src/features/room/server/switchbot";
-import type { Thresholds } from "../src/features/room/shared/api";
-import { evaluate, warningText } from "../src/features/room/shared/thresholds";
+import { alertMetrics, roomAlert } from "../src/features/piyolog/server/room-alerts";
+import { toRecords } from "../src/features/piyolog/server/room";
+import { isHubType, isMeterType, listDevices, meterStatus, sign, SwitchBotError, viaHub } from "../src/features/piyolog/server/switchbot";
+import type { Thresholds } from "../src/features/piyolog/shared/room-api";
+import { evaluate, warningText } from "../src/features/piyolog/shared/room-thresholds";
 
 const CREDS = { token: "example-token", secret: "example-secret" };
 const T: Thresholds = { temperatureLow: 20, temperatureHigh: 26, humidityLow: 40, humidityHigh: null };
@@ -48,6 +48,8 @@ describe("SwitchBot API", () => {
   it("温湿度計の種類を見分ける", () => {
     expect(["Meter", "MeterPlus", "MeterPro", "MeterPro(CO2)", "WoIOSensor", "Hub 2"].every(isMeterType)).toBe(true);
     expect(["Curtain", "Bot", "Hub Mini"].some(isMeterType)).toBe(false);
+    expect(isHubType("Hub 2")).toBe(true);
+    expect(isHubType("Meter")).toBe(false);
   });
 
   it("エラーはわかる文にし、トークンを含めない", async () => {
@@ -80,6 +82,7 @@ describe("基準と通知", () => {
   it("「すぐ」なら、基準の外になった最初の値で通知する", () => {
     const alert = roomAlert("temperature", [{ at: at(0), value: 21 }, { at: at(5), value: 19.5 }], T, 0, at(6));
     expect(alert?.title).toBe("室温が低くなっています");
+    expect(alert?.type).toBe("room_temperature_out");
     expect(alert?.dedupeKey).toBe(`room:temperature:low:${new Date(at(5)).toISOString()}`);
   });
 

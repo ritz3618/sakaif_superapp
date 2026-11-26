@@ -80,3 +80,20 @@
   list-style: none;
   font-size: var(--font-sm);
 }
+
+.piyolog-devices {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0 0;
+}
+
+.piyolog-devices li {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.piyolog-devices .note {
+  margin: 0;
+}

@@ -1,4 +1,4 @@
-/** 室温・湿度の画面とサーバーがやり取りするデータの型。時刻は UTC の ISO 8601。 */
+/** 室温・湿度(SwitchBot)の、画面とサーバーがやり取りするデータの型。時刻は UTC の ISO 8601。 */
 
 export type Metric = "temperature" | "humidity";
 
@@ -37,5 +37,7 @@ export interface DeviceCheck {
     cloud: boolean | null;
     /** ハブにつながっているか */
     viaHub: boolean;
+    /** ハブ本体か(Hub 2 などは、ハブ本体に温湿度のセンサーがある) */
+    isHub: boolean;
   }[];
 }
