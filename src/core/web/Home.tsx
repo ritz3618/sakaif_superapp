@@ -19,7 +19,7 @@ export function gridColumns(count: number): number {
 function Card({ card }: { card: HomeCard }) {
   const content = (
     <>
-      <img className="card__icon" src={card.iconUrl} alt="" width={64} height={64} />
+      <img className="card__icon" src={card.iconUrl} alt="" width={102} height={102} />
       <span className="card__name">{card.name}</span>
       {card.summary && <span className="card__summary">{card.summary}</span>}
     </>

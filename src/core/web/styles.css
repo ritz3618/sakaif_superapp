@@ -144,7 +144,8 @@ a {
 }
 
 .card__icon {
-  width: clamp(36px, 40%, 64px);
+  /* 以前(36〜64px、カード幅の40%)の約1.6倍(2026-11-26 ユーザー要望) */
+  width: clamp(58px, 64%, 102px);
   height: auto;
   aspect-ratio: 1;
   border-radius: 22%;

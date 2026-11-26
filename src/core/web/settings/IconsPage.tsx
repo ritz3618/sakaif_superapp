@@ -33,6 +33,7 @@ export function IconsPage() {
     <div className="page">
       <Header title="アイコン" showHome />
       <main className="settings">
+        <p className="note">アイコンは夫婦共通です。どちらかが変えると、もう一方のホームにも反映されます。</p>
         <p className="note">
           iPhone のホーム画面に追加済みのアイコンは、追加したときの画像のままです。変えたあとは、ホーム画面のアイコンを一度削除して、追加し直してください。
         </p>
