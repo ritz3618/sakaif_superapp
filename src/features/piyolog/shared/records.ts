@@ -49,7 +49,25 @@ export const TYPE_LABELS: Readonly<Record<string, string>> = {
 };
 
 export function typeLabel(type: string): string {
-  const custom = /^Custom(\d+)$/.exec(type);
+  const custom = /^Custom(\d*)$/.exec(type);
   if (custom) return `カスタム${custom[1]}`;
   return TYPE_LABELS[type] ?? type;
+}
+
+/** テキストの取り込みで作った記録の ID の先頭(フィードの記録の ID と区別する) */
+export const TEXT_ID_PREFIX = "text:";
+
+/**
+ * 記録の種類の表示名。テキストの取り込みで作った記録は、書き出しに書かれていた名前(カスタム記録の名前など)を使う。
+ */
+export function recordLabel(kind: string, payload: string | null): string {
+  if (payload) {
+    try {
+      const parsed = JSON.parse(payload) as { label?: unknown; origin?: unknown };
+      if (parsed.origin === "monthly-text" && typeof parsed.label === "string" && parsed.label) return parsed.label;
+    } catch {
+      // 読めなければ、種類から決める
+    }
+  }
+  return typeLabel(kind);
 }

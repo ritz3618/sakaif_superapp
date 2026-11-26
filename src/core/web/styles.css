@@ -25,6 +25,9 @@
   --accent-text: #ffffff;
   --danger: #b3261e;
   --warn-bg: #fff4e0;
+  /* 注意を引く色(基準の時間を過ぎた、いつもより少ない、など) */
+  --alert: #c92a2a;
+  --alert-bg: #fff0f0;
   --header-h: 52px;
   color-scheme: light dark;
 }
@@ -40,6 +43,8 @@
     --accent-text: #0f1a28;
     --danger: #f2b8b5;
     --warn-bg: #3a2e16;
+    --alert: #ff8787;
+    --alert-bg: #3b1d1f;
     --trend-more: #ffa94d;
     --trend-less: #74c0fc;
   }
@@ -609,6 +614,11 @@ button.button--small {
   display: none;
 }
 
+.file-button--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* ---- 共通の見た目の部品(core/web/ui.tsx) ---- */
 .ui-panel__title {
   display: flex;
@@ -676,4 +686,208 @@ button.button--small {
 
 .ui-trend--same {
   color: var(--muted);
+}
+
+/* 注意の見た目(Panel / BigValue の tone="warn") */
+.ui-panel--warn {
+  border: 2px solid var(--alert);
+  background: linear-gradient(var(--alert-bg), var(--surface) 70%);
+}
+
+.ui-big--warn {
+  color: var(--alert);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* 比べる表(CompareTable) */
+.ui-compare {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-2);
+  font-size: var(--font-sm);
+}
+
+.ui-compare__caption {
+  text-align: left;
+  font-size: var(--font-xs);
+  color: var(--muted);
+  padding-bottom: var(--space-1);
+}
+
+.ui-compare th,
+.ui-compare td {
+  padding: 6px var(--space-1);
+  border-top: 1px solid var(--border);
+  text-align: right;
+  vertical-align: middle;
+}
+
+.ui-compare thead th {
+  border-top: none;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.ui-compare th[scope="row"],
+.ui-compare thead th:first-child {
+  text-align: left;
+  font-weight: 500;
+}
+
+.ui-compare__value {
+  font-size: var(--font-md);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ui-compare__reference {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ui-compare__trend {
+  white-space: nowrap;
+}
+
+.ui-compare__trend > * {
+  display: block;
+}
+
+.ui-compare__row--warn {
+  background: var(--alert-bg);
+}
+
+.ui-compare__row--warn .ui-compare__value {
+  color: var(--alert);
+}
+
+.ui-compare__warning {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--alert);
+}
+
+.ui-compare__row--muted th,
+.ui-compare__row--muted td {
+  color: var(--muted);
+}
+
+.ui-compare__row--muted .ui-compare__value {
+  font-size: var(--font-sm);
+  font-weight: 500;
+}
+
+/* 時間の帯(Timeline) */
+.ui-timeline {
+  margin-top: var(--space-2);
+}
+
+.ui-timeline__row {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.ui-timeline__label {
+  font-size: var(--font-xs);
+  line-height: 1.3;
+  color: var(--muted);
+  white-space: pre-line;
+}
+
+.ui-timeline__bar {
+  position: relative;
+  height: 34px;
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.ui-timeline__seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.ui-timeline__seg--mark {
+  top: 50%;
+  bottom: 2px;
+  border-radius: 2px;
+  min-width: 3px;
+}
+
+.ui-timeline__future {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, transparent 0 4px, var(--border) 4px 5px);
+  opacity: 0.6;
+}
+
+.ui-timeline__marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+}
+
+.ui-timeline__row--ticks {
+  margin-top: -4px;
+}
+
+.ui-timeline__ticks {
+  position: relative;
+  height: 16px;
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+
+.ui-timeline__ticks span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.ui-timeline__ticks span:first-child {
+  transform: none;
+}
+
+.ui-timeline__ticks span:last-child {
+  transform: translateX(-100%);
+}
+
+.ui-timeline__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+
+.ui-timeline__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.ui-timeline__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
 }

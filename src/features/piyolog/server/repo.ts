@@ -9,6 +9,8 @@ export interface SyncState {
   lastError?: string | null;
   /** 429(取得が多すぎる)を受けたとき、この時刻まで取得を控える */
   pauseUntil?: string | null;
+  /** 最後に取得できたフィードの範囲の始まり(これより後は、フィードが正。テキストの取り込みでは扱わない) */
+  feedFrom?: string;
 }
 
 const STATE_KEY = "sync";

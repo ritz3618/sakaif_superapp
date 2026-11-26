@@ -4,12 +4,12 @@
  */
 import type { DataRecord, DataRecordInput, FeatureJobContext, FeatureSettings, SharedData } from "../../../core/server/feature-api";
 import { DAY_MS, MINUTE_MS, jstDate, jstStartOfDay } from "../../../core/shared/time";
-import type { PiyologSummary } from "../shared/api";
+import type { LatestValue, PiyologDataInfo, PiyologSummary } from "../shared/api";
 import { DIAPER_TYPES, FEEDING_TYPES, PIYOLOG_SOURCE, SLEEP_TYPE, WAKE_TYPE } from "../shared/records";
 import { diaperAlert, expiryAlert, feedExpiry, feedingAlert, type LastRecord } from "./alerts";
 import { FeedError, fetchFeed, type Feed, type FeedRecord } from "./feed";
 import { readSyncState, writeSyncState } from "./repo";
-import { computeStats } from "./stats";
+import { computeStats, computeTimeline } from "./stats";
 
 /** 429 を受けたあと、取得を控える時間 */
 const PAUSE_AFTER_RATE_LIMIT_MS = 15 * MINUTE_MS;
@@ -65,7 +65,14 @@ export async function syncFeed(
   try {
     const feed = await fetchFeed(url, fetcher);
     const result = await data.applySnapshot(PIYOLOG_SOURCE, feedToSnapshot(feed));
-    await writeSyncState(db, { lastSuccessAt: at, lastAttemptAt: at, lastAttemptOk: true, lastError: null, pauseUntil: null });
+    await writeSyncState(db, {
+      lastSuccessAt: at,
+      lastAttemptAt: at,
+      lastAttemptOk: true,
+      lastError: null,
+      pauseUntil: null,
+      feedFrom: feed.from,
+    });
     return { status: "synced", written: result.written, deleted: result.deleted };
   } catch (error) {
     const message = error instanceof FeedError ? error.message : "フィードの保存中にエラーが起きました";
@@ -119,6 +126,9 @@ export async function runScheduledJob(ctx: FeatureJobContext): Promise<void> {
   }
 }
 
+const toLatest = (r: DataRecord | null): LatestValue | null =>
+  r ? { at: r.recordedAt, value: r.value, unit: r.unit } : null;
+
 /** 画面に出すまとめ */
 export async function buildSummary(
   db: D1Database,
@@ -127,17 +137,25 @@ export async function buildSummary(
   now: Date,
 ): Promise<PiyologSummary> {
   const config = await feedConfig(settings);
-  const since = new Date(jstStartOfDay(now).getTime() - 8 * DAY_MS).toISOString();
-  const [state, rows, earliest, lastFeeding, lastPee, lastPoop] = await Promise.all([
-    readSyncState(db),
-    data.query(PIYOLOG_SOURCE, { from: since }),
-    data.earliestAt(PIYOLOG_SOURCE),
-    data.latest(PIYOLOG_SOURCE, FEEDING_TYPES),
-    data.latest(PIYOLOG_SOURCE, ["Pee"]),
-    data.latest(PIYOLOG_SOURCE, ["Poop"]),
-  ]);
+  // 昨日を「その前の7日」と比べるため、9日前の0時から読む
+  const since = new Date(jstStartOfDay(now).getTime() - 9 * DAY_MS).toISOString();
+  const [state, rows, earliest, interval, lastFeeding, lastPee, lastPoop, temperature, weight, height, bath] =
+    await Promise.all([
+      readSyncState(db),
+      data.query(PIYOLOG_SOURCE, { from: since }),
+      data.earliestAt(PIYOLOG_SOURCE),
+      settings.get("feedingIntervalMinutes"),
+      data.latest(PIYOLOG_SOURCE, FEEDING_TYPES),
+      data.latest(PIYOLOG_SOURCE, ["Pee"]),
+      data.latest(PIYOLOG_SOURCE, ["Poop"]),
+      data.latest(PIYOLOG_SOURCE, ["Temperature"]),
+      data.latest(PIYOLOG_SOURCE, ["Weight"]),
+      data.latest(PIYOLOG_SOURCE, ["Height"]),
+      data.latest(PIYOLOG_SOURCE, ["Bath"]),
+    ]);
   const records = rows.map((r) => ({ type: r.kind, at: Date.parse(r.recordedAt), value: r.value, unit: r.unit }));
-  const stats = computeStats(records, now.getTime(), earliest ? Date.parse(earliest) : null);
+  const earliestAt = earliest ? Date.parse(earliest) : null;
+  const stats = computeStats(records, now.getTime(), earliestAt);
 
   const sleepEvents = rows.filter((r) => r.kind === SLEEP_TYPE || r.kind === WAKE_TYPE);
   const lastSleepEvent = sleepEvents.at(-1);
@@ -160,6 +178,7 @@ export async function buildSummary(
             amountMl: lastFeeding.value !== null && lastFeeding.unit === "ml" ? lastFeeding.value : null,
           }
         : null,
+      intervalMinutes: interval as number,
     },
     pee: { lastAt: lastPee?.recordedAt ?? null },
     poop: { lastAt: lastPoop?.recordedAt ?? null },
@@ -170,7 +189,46 @@ export async function buildSummary(
       lastWakeAt: lastWake?.recordedAt ?? null,
     },
     today: stats.today,
-    comparison: stats.comparison,
+    yesterday: stats.yesterday,
+    comparison: { sameTime: stats.sameTime, fullDay: stats.fullDay, perFeedingMl: stats.perFeedingMl },
+    latest: {
+      temperature: toLatest(temperature),
+      weight: toLatest(weight),
+      height: toLatest(height),
+      bath: toLatest(bath),
+    },
+    timeline: computeTimeline(records, now.getTime(), earliestAt),
+    expiry: config.createdOn ? { createdOn: config.createdOn, ...feedExpiry(config.createdOn, now.getTime()) } : null,
+  };
+}
+
+/** フィードの範囲の始まり(まだ取得できていなければ null) */
+async function feedFrom(db: D1Database, now: Date): Promise<Date | null> {
+  const state = await readSyncState(db);
+  return state.feedFrom ? new Date(Math.min(Date.parse(state.feedFrom), now.getTime())) : null;
+}
+
+/** テキストの取り込みで扱う期間の終わり(フィードの範囲の始まり。フィードを使っていなければ今) */
+export async function importCutoff(db: D1Database, now: Date): Promise<Date> {
+  return (await feedFrom(db, now)) ?? now;
+}
+
+/** データの管理の画面に出す情報 */
+export async function buildDataInfo(
+  db: D1Database,
+  data: SharedData,
+  settings: FeatureSettings,
+  now: Date,
+): Promise<PiyologDataInfo> {
+  const [config, stored, cutoff] = await Promise.all([
+    feedConfig(settings),
+    data.stats(PIYOLOG_SOURCE),
+    feedFrom(db, now),
+  ]);
+  return {
+    configured: config.url !== null,
+    stored,
+    importCutoff: cutoff?.toISOString() ?? null,
     expiry: config.createdOn ? { createdOn: config.createdOn, ...feedExpiry(config.createdOn, now.getTime()) } : null,
   };
 }

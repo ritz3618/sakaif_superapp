@@ -1,12 +1,25 @@
 /*
  * 育児ログの画面だけの見た目の調整。
  * 決まり(テストで確認): クラス名は「piyolog-」で始めるか、[data-feature="piyolog"] の中に限る。
- * 共通の見た目(パネル、数値のタイル、増減の色など)は、core の共通部品で決まる。
+ * 共通の見た目(パネル、比べる表、時間の帯、増減の色など)は、core の共通部品で決まる。
  */
 
-/* 例: 育児ログだけ、大きな値を少し大きくする(共通の値を、この機能の中だけで上書き) */
+/* 育児ログだけ、大きな値を少し大きくする(共通の値を、この機能の中だけで上書き)。時間の帯の色もここで決める */
 [data-feature="piyolog"] {
   --font-xl: 28px;
+  --piyolog-sleep: #5c7cfa;
+  --piyolog-awake: #ffec99;
+  --piyolog-feeding: #e8590c;
+  --piyolog-poop: #8d5524;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-feature="piyolog"] {
+    --piyolog-sleep: #4263eb;
+    --piyolog-awake: #5c4f1c;
+    --piyolog-feeding: #ff922b;
+    --piyolog-poop: #c08457;
+  }
 }
 
 .piyolog-sync {
@@ -27,9 +40,43 @@
   margin: -4px var(--space-1) 14px;
 }
 
-.piyolog-download {
+.piyolog-link,
+.piyolog-back {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
   font-weight: 600;
+}
+
+.piyolog-back {
+  margin: -8px 0 var(--space-2);
+}
+
+.piyolog-stored {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  margin: 0 0 var(--space-1);
+}
+
+.piyolog-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.piyolog-preview {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.piyolog-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  padding: 0;
+  margin: 0 0 var(--space-2);
+  list-style: none;
+  font-size: var(--font-sm);
 }

@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { diaperAlert, expiryAlert, feedExpiry, feedingAlert } from "../src/features/piyolog/server/alerts";
 import { recordsToCsv } from "../src/features/piyolog/server/csv";
 import { FeedError, fetchFeed, parseFeed, type Feed } from "../src/features/piyolog/server/feed";
-import { computeStats, sleepIntervals, type StatRecord } from "../src/features/piyolog/server/stats";
+import { computeStats, computeTimeline, sleepIntervals, type StatRecord } from "../src/features/piyolog/server/stats";
 import { feedToSnapshot } from "../src/features/piyolog/server/service";
 import type { DataRecord } from "../src/core/server/data";
 import { formatMinutes } from "../src/features/piyolog/shared/format";
-import { compare } from "../src/features/piyolog/web/compare";
+import { compare, isShort } from "../src/features/piyolog/web/compare";
 
 // 公式のデータ仕様のレスポンス例(架空の記録)をもとにした例
 const SAMPLE = {
@@ -115,8 +115,9 @@ describe("集計", () => {
     const now = jst("11-26 12:00");
     const records = [rec("Sleep", "11-25 23:00"), rec("WakeUp", "11-26 06:00"), rec("Formula", "11-26 07:00", 120), rec("Formula", "11-26 10:30", 140), rec("Pee", "11-26 08:00"), rec("Poop", "11-26 09:00")];
     const stats = computeStats(records, now, jst("11-26 00:00"));
-    expect(stats.today).toEqual({ feedingCount: 2, feedingMl: 260, sleepMinutes: 360, peeCount: 1, poopCount: 1 });
-    expect(stats.comparison).toBeNull(); // 前日より前のデータが無いので比較しない
+    expect(stats.today).toEqual({ feedingCount: 2, feedingMl: 260, feedingMlCount: 2, sleepMinutes: 360, peeCount: 1, poopCount: 1 });
+    expect(stats.sameTime).toBeNull(); // 前日より前のデータが無いので比較しない
+    expect(stats.fullDay).toBeNull();
   });
 
   it("過去との比較は、データがある日の「同じ時刻まで」の平均", () => {
@@ -129,9 +130,68 @@ describe("集計", () => {
       rec("Formula", "11-26 09:00", 150),
     ];
     const stats = computeStats(records, now, jst("11-24 00:00"));
-    expect(stats.comparison?.days).toBe(2);
-    expect(stats.comparison?.average.feedingCount).toBe(1.5);
-    expect(stats.comparison?.average.feedingMl).toBe(180);
+    expect(stats.sameTime?.days).toBe(2);
+    expect(stats.sameTime?.average.feedingCount).toBe(1.5);
+    expect(stats.sameTime?.average.feedingMl).toBe(180);
+    // 1回の平均は、過去7日(1日分すべて)の量の合計 ÷ 量のある授乳の回数
+    expect(stats.perFeedingMl).toBe((100 + 999 + 140 + 120) / 4);
+  });
+
+  it("昨日(1日分)は、その前の7日の1日分の平均と比べる。記録の無い日は平均に入れない", () => {
+    const now = jst("11-26 12:00");
+    const records = [
+      rec("Formula", "11-22 08:00", 100),
+      rec("Formula", "11-22 20:00", 100),
+      // 11-23 は記録なし(抜けている日)→ 平均に入れない
+      rec("Formula", "11-24 08:00", 120),
+      rec("Formula", "11-24 22:00", 120),
+      rec("Formula", "11-25 08:00", 150),
+      rec("Formula", "11-25 23:30", 150),
+      rec("Formula", "11-26 09:00", 150),
+    ];
+    const stats = computeStats(records, now, jst("11-22 00:00"));
+    expect(stats.yesterday?.feedingMl).toBe(300);
+    expect(stats.fullDay?.days).toBe(2); // 11-22 と 11-24
+    expect(stats.fullDay?.average.feedingMl).toBe(220);
+  });
+
+  it("昨日の記録が無ければ、昨日は null", () => {
+    const now = jst("11-26 12:00");
+    const stats = computeStats([rec("Formula", "11-26 09:00", 150)], now, jst("11-20 00:00"));
+    expect(stats.yesterday).toBeNull();
+  });
+});
+
+describe("時間の帯", () => {
+  it("睡眠・起きている時間・授乳・うんちを、0時からの分で返す(今日は今まで、昨日は24時まで)", () => {
+    const now = jst("11-26 10:00");
+    const records = [
+      rec("Sleep", "11-25 21:00"),
+      rec("WakeUp", "11-26 06:00"),
+      rec("Formula", "11-26 06:30", 120),
+      rec("Poop", "11-26 07:00"),
+      rec("Sleep", "11-26 08:00"),
+      rec("WakeUp", "11-26 09:00"),
+    ];
+    const [today, yesterday] = computeTimeline(records, now, jst("11-25 20:00"));
+    expect(today).toEqual({
+      date: "2026-11-26",
+      until: 600,
+      sleep: [
+        { start: 0, end: 360 },
+        { start: 480, end: 540 },
+      ],
+      awake: [
+        { start: 360, end: 480 },
+        { start: 540, end: 600 },
+      ],
+      feedings: [{ at: 390, ml: 120 }],
+      poops: [420],
+    });
+    // 昨日は、記録が始まった 20:00 から。21:00 からは寝ている
+    expect(yesterday?.until).toBe(1440);
+    expect(yesterday?.awake).toEqual([{ start: 1200, end: 1260 }]);
+    expect(yesterday?.sleep).toEqual([{ start: 1260, end: 1440 }]);
   });
 });
 
@@ -178,15 +238,35 @@ describe("表示", () => {
     expect(compare(450, 480, "minutes")).toEqual({ direction: "less", diffText: "-30分" });
   });
 
-  it("CSV は BOM 付き、日本時間、カンマや引用符を含むメモも正しく書く", () => {
-    const base = { source: "piyolog", payload: null, firstSeenAt: "", updatedAt: "" };
+  it("「少なめ」は、ふだんの85%未満で、差が量30ml・睡眠30分以上のとき", () => {
+    expect(isShort(600, 720, "ml")).toBe(true); // 83%
+    expect(isShort(620, 720, "ml")).toBe(false); // 86%
+    expect(isShort(20, 60, "ml")).toBe(true); // 33%、差40ml
+    expect(isShort(0, 25, "ml")).toBe(false); // 差が30ml未満(0時すぎなど、まだ量が少ない時間帯)
+    expect(isShort(400, 480, "minutes")).toBe(true); // 83%、差80分
+    expect(isShort(0, 0, "minutes")).toBe(false);
+  });
+
+  it("CSV は BOM 付き、日本時間、カンマや引用符を含むメモも正しく書く。取り込んだ記録は、書き出しの名前と取得元を出す", () => {
+    const base = { source: "piyolog", payload: null, firstSeenAt: "", updatedAt: "", deletedAt: null };
     const rows: DataRecord[] = [
-      { ...base, id: "e1", kind: "Formula", recordedAt: "2026-11-26T01:05:00.000Z", value: 120, unit: "ml", note: 'よく飲んだ, "完飲"', deletedAt: null },
-      { ...base, id: "e2", kind: "Custom3", recordedAt: "2026-11-26T02:00:00.000Z", value: null, unit: null, note: null, deletedAt: "2026-11-26T03:00:00.000Z" },
+      { ...base, id: "e1", kind: "Formula", recordedAt: "2026-11-26T01:05:00.000Z", value: 120, unit: "ml", note: 'よく飲んだ, "完飲"' },
+      { ...base, id: "e2", kind: "Custom3", recordedAt: "2026-11-26T02:00:00.000Z", value: null, unit: null, note: null },
+      {
+        ...base,
+        id: "text:202610050900:Custom:0",
+        kind: "Custom",
+        recordedAt: "2026-10-05T00:00:00.000Z",
+        value: null,
+        unit: null,
+        note: null,
+        payload: JSON.stringify({ label: "爪切り", origin: "monthly-text" }),
+      },
     ];
     const csv = recordsToCsv(rows);
-    expect(csv.startsWith("﻿日時(日本時間),種類")).toBe(true);
-    expect(csv).toContain('2026-11-26 10:05:00,ミルク,Formula,120,ml,"よく飲んだ, ""完飲""",e1,');
-    expect(csv).toContain("2026-11-26 11:00:00,カスタム3,Custom3,,,,e2,削除済み");
+    expect(csv.startsWith("\uFEFF日時(日本時間),種類")).toBe(true);
+    expect(csv).toContain('2026-11-26 10:05:00,ミルク,Formula,120,ml,"よく飲んだ, ""完飲""",フィード,e1');
+    expect(csv).toContain("2026-11-26 11:00:00,カスタム3,Custom3,,,,フィード,e2");
+    expect(csv).toContain("2026-10-05 09:00:00,爪切り,Custom,,,,テキストの取り込み,text:202610050900:Custom:0");
   });
 });

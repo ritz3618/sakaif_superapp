@@ -30,3 +30,15 @@ export function compare(today: number, average: number, unit: CompareUnit): Comp
   if (Math.abs(diff) < threshold) return { direction: "same", diffText: "ほぼ同じ" };
   return { direction: diff > 0 ? "more" : "less", diffText: formatDiff(Math.round(diff * 10) / 10, unit) };
 }
+
+/**
+ * 「いつもより少ない」の目安(2026-11-26 提案。ユーザーの確認待ち)。
+ * ふだんの 85% 未満で、差が一定以上(量は30ml以上、睡眠は30分以上)のとき。
+ * 回数では使わない(回数は日によってばらつくため、警告しない。2026-11-26 ユーザー)。
+ */
+export const SHORTAGE_RATIO = 0.85;
+const SHORTAGE_MIN_DIFF: Record<"ml" | "minutes", number> = { ml: 30, minutes: 30 };
+
+export function isShort(today: number, average: number, unit: "ml" | "minutes"): boolean {
+  return average > 0 && today < average * SHORTAGE_RATIO && average - today >= SHORTAGE_MIN_DIFF[unit];
+}

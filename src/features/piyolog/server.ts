@@ -1,13 +1,19 @@
 /**
  * 育児ログ(ぴよログのデータを使う機能)のサーバー側。
  * - 5分おきにフィードを取得して保存し、授乳・おむつ替え・フィードの期限の通知を判定する。
- * - 画面用の API: GET /summary、POST /refresh(今すぐ取得)、GET /export.csv
+ * - 画面用の API: GET /summary、POST /refresh(今すぐ取得)、GET /data-info、POST /import(月ごとのテキストの取り込み)、
+ *   GET /export.csv
  */
 import { defineFeatureServer, featureContext, formatMinutesFromIso } from "./server/helpers";
 import { readSyncState } from "./server/repo";
 import { recordsToCsv } from "./server/csv";
-import { buildSummary, feedConfig, runScheduledJob, syncFeed } from "./server/service";
+import { importMonthlyText } from "./server/import";
+import { buildDataInfo, buildSummary, feedConfig, importCutoff, runScheduledJob, syncFeed } from "./server/service";
 import { DIAPER_TYPES, FEEDING_TYPES, PIYOLOG_SOURCE } from "./shared/records";
+import { TextImportError } from "./shared/text-import";
+
+/** 取り込みで1回に受け付けるテキストの大きさの上限(1か月分で20〜30KB 程度) */
+const MAX_IMPORT_BYTES = 200_000;
 
 /** 手動の取得は、前回の試行から1分あける(ぴよログの推奨: 同じURLへは1分に1回程度まで) */
 const MANUAL_REFRESH_INTERVAL_MS = 60 * 1000;
@@ -36,9 +42,30 @@ export default defineFeatureServer({
       return c.json(await buildSummary(ctx.db, ctx.data, ctx.settings, new Date()));
     });
 
+    app.get("/data-info", async (c) => {
+      const ctx = featureContext(c);
+      return c.json(await buildDataInfo(ctx.db, ctx.data, ctx.settings, new Date()));
+    });
+
+    // 月ごとのテキストの取り込み。画面から、数日分ずつに分けて送られてくる(本文は {"text": "..."})
+    app.post("/import", async (c) => {
+      const ctx = featureContext(c);
+      const body = (await c.req.json().catch(() => null)) as { text?: unknown } | null;
+      const text = body?.text;
+      if (typeof text !== "string" || !text) return c.json({ error: "テキストがありません" }, 400);
+      if (text.length > MAX_IMPORT_BYTES) return c.json({ error: "テキストが大きすぎます" }, 413);
+      try {
+        return c.json(await importMonthlyText(ctx.data, text, await importCutoff(ctx.db, new Date())));
+      } catch (error) {
+        if (error instanceof TextImportError) return c.json({ error: error.message }, 400);
+        throw error;
+      }
+    });
+
+    // 保存しているすべての記録(削除の印が付いたものを除く)
     app.get("/export.csv", async (c) => {
       const ctx = featureContext(c);
-      const csv = recordsToCsv(await ctx.data.query(PIYOLOG_SOURCE, { includeDeleted: true }));
+      const csv = recordsToCsv(await ctx.data.query(PIYOLOG_SOURCE));
       const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       return new Response(csv, {
         headers: {

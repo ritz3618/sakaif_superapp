@@ -8,7 +8,23 @@ import type { FeatureMeta } from "../shared/feature";
 export { Link, navigate } from "./router";
 export { ApiError } from "./api";
 /** 共通の見た目の部品(これを使うと、アプリ全体の見た目のテイストがそろう) */
-export { BigValue, Button, Note, Panel, Stat, StatGrid, Trend, type TrendDirection } from "./ui";
+export {
+  BigValue,
+  Button,
+  CompareTable,
+  FileButton,
+  Note,
+  Panel,
+  Stat,
+  StatGrid,
+  Timeline,
+  Trend,
+  type CompareRow,
+  type TimelineRow,
+  type TimelineSegment,
+  type Tone,
+  type TrendDirection,
+} from "./ui";
 
 export interface FeatureScreenProps {
   feature: FeatureMeta;
