@@ -11,7 +11,7 @@ import type { FeatureSettings } from "./settings";
 export type { AppBindings, Env, User } from "./env";
 export type { NotifyRequest, NotifyUserResult, NotifyOutcome } from "./notify";
 export type { FeatureSettings } from "./settings";
-export { jstDate, jstMinuteOfDay, jstStartOfDay, jstTime, nowIso } from "./time";
+export * from "./time";
 
 /** 画面からのリクエストを処理するときに渡される情報 */
 export interface FeatureRequestContext {

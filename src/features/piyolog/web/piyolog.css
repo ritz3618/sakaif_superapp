@@ -1,0 +1,94 @@
+/* 育児ログの画面だけで使う見た目(クラス名は ikuji- で始める) */
+.ikuji {
+  --ikuji-more: #d9480f;
+  --ikuji-less: #1c7ed6;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ikuji {
+    --ikuji-more: #ffa94d;
+    --ikuji-less: #74c0fc;
+  }
+}
+
+.ikuji-sync {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ikuji-sync__error {
+  color: var(--danger);
+}
+
+.ikuji-block h2 {
+  margin-bottom: 2px;
+}
+
+.ikuji-big {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 2px 0 4px;
+}
+
+.ikuji-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ikuji-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.ikuji-metric__label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ikuji-metric__value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.ikuji-metric .note {
+  margin: 0;
+}
+
+.ikuji-compare {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ikuji-compare--more {
+  color: var(--ikuji-more);
+}
+
+.ikuji-compare--less {
+  color: var(--ikuji-less);
+}
+
+.ikuji-compare--same {
+  color: var(--muted);
+}
+
+.ikuji-footnote {
+  margin: -4px 4px 14px;
+}
+
+.ikuji-download {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+}

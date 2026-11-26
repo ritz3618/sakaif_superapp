@@ -1,7 +1,7 @@
 # sakaif_superapp
 
 家族用スーパーアプリ(複数の機能を1つに載せる Web アプリの器)。Cloudflare Workers + D1 で動く PWA。
-最初の機能は「育児ログ」。ぴよログのデータフィードを使った育児記録の表示・通知(第3段階で実装)。
+最初の機能は「育児ログ」。ぴよログのデータフィードを5分おきに取得して D1 に保存し、経過時間・今日の合計・過去1週間との比較の表示と、授乳・おむつ替え・フィード期限の通知を行う。
 
 - 要件と決定事項: 引き継ぎメモ(Claude Docs)
 - Cloudflare の準備と iPhone での確認: [docs/cloudflare-setup.md](docs/cloudflare-setup.md)
