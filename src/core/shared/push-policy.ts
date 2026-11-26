@@ -10,7 +10,7 @@ import { APP_INFO } from "./app";
 /** ブラウザ(ホーム画面のアイコン以外)から開いているときの値 */
 export const BROWSER_CONTEXT = "browser";
 
-/** appContext は、起動したアイコン("app"、"piyolog" など)、またはブラウザなら "browser"。 */
+/** appContext は、起動したアイコン(本体なら "app"、機能単体なら その機能ID)、またはブラウザなら "browser"。 */
 export function canRegisterPush(appContext: string): boolean {
   return appContext === APP_INFO.id || appContext === BROWSER_CONTEXT;
 }

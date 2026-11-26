@@ -36,8 +36,16 @@ test/                  単体テストと、境界ルールの検査
    - 通知: `feature.ts` の `notifications` に種類を宣言し、定期実行の中で `ctx.notify({ type, to, dedupeKey, title, body, url })` を呼ぶ。
      オン/オフ、通知を避ける時間帯(明けたときに送る)、重複防止(`dedupeKey` が同じなら1回だけ)、履歴は共通部分が処理する。
    - 定期実行: `scheduled.run` が例外を投げると失敗として数え、続けて失敗したら全員にエラー通知を送る(各自オフにできる)。
+   - 共通データ: ほかの機能と使い回したい記録(育児の記録、温湿度など)は、`feature.ts` の `dataSources` に出どころを宣言し、
+     `ctx.data.applySnapshot(...)`(ある期間の全件を反映)や `ctx.data.upsert(...)`(追記)で、共通の表 `core_records` に書く。
+     読み出しは、どの機能からも `ctx.data.query(source, ...)` / `ctx.data.latest(...)` でできる。書けるのは宣言した機能だけ。
+   - 見た目: 画面は `core/web/feature-api` の共通部品(`Panel`、`Stat`、`StatGrid`、`BigValue`、`Trend`、`Note`、`Button`)で作る。
+     機能ごとの調整は、その機能の CSS に、クラス名「<フォルダ名>-」か `[data-feature="<機能ID>"]` の中でだけ書く。
+     共通の値(`--radius-lg`、`--font-xl` など)も、`[data-feature="<機能ID>"]` の中で上書きできる。機能の色は `var(--feature-color)`。
 3. 守ること(`npm test` で自動検査):
    - 機能は、ほかの機能を読み込まない。core からは `core/shared/*` と `feature-api.ts` だけを使う。
+   - core には、個別の機能の名前やIDを書かない(コメントも含む)。
+   - 機能の CSS は、その機能の中だけに効く書き方にする(上の「見た目」)。
    - D1 のテーブル名は `<フォルダ名>_` で始める。共通部分は `core_`。
    - マイグレーションは追加のみ(適用済みのファイルは書き換えない)。Worker が起動時に自動で適用する。
 

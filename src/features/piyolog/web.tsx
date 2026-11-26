@@ -2,9 +2,20 @@
  * 育児ログのメイン画面。
  * 授乳・睡眠・おしっこ・うんちの今の状態と今日の合計を出し、過去1週間の同じ時刻までの平均と比べる。
  * 経過時間は30秒ごと、データは1分ごとに更新する。
+ * 見た目は共通の部品(Panel、Stat など)で作り、この機能だけの調整は web/piyolog.css に書く。
  */
 import { useCallback, useEffect, useState } from "react";
-import { Link, type FeatureScreenProps } from "../../core/web/feature-api";
+import {
+  BigValue,
+  Button,
+  Link,
+  Note,
+  Panel,
+  Stat,
+  StatGrid,
+  Trend,
+  type FeatureScreenProps,
+} from "../../core/web/feature-api";
 import { jstDate, jstDateTimeLabel, jstTime } from "../../core/shared/time";
 import type { DayMetrics, PiyologSummary } from "./shared/api";
 import { formatMinutes, formatMl, minutesBetween } from "./shared/format";
@@ -33,22 +44,7 @@ function Compare({
 }) {
   if (!summary.comparison) return null;
   const result = compare(pick(summary.today), pick(summary.comparison.average), unit);
-  const arrow = result.direction === "more" ? "↑" : result.direction === "less" ? "↓" : "→";
-  return (
-    <span className={`ikuji-compare ikuji-compare--${result.direction}`}>
-      いつもより {result.diffText} {arrow}
-    </span>
-  );
-}
-
-function Metric({ label, value, children }: { label: string; value: string; children?: React.ReactNode }) {
-  return (
-    <div className="ikuji-metric">
-      <span className="ikuji-metric__label">{label}</span>
-      <span className="ikuji-metric__value">{value}</span>
-      {children}
-    </div>
-  );
+  return <Trend direction={result.direction}>いつもより {result.diffText}</Trend>;
 }
 
 export default function IkujiLogScreen({ apiFetch }: FeatureScreenProps) {
@@ -90,18 +86,17 @@ export default function IkujiLogScreen({ apiFetch }: FeatureScreenProps) {
     }
   };
 
-  if (error && !summary) return <p className="message message--error">{error}</p>;
-  if (!summary) return <p className="message">読み込み中…</p>;
+  if (error && !summary) return <Note tone="error">{error}</Note>;
+  if (!summary) return <Note>読み込み中…</Note>;
 
   if (!summary.configured) {
     return (
-      <div className="panel">
-        <h2>フィードURLが未設定です</h2>
-        <p className="note">
+      <Panel title="フィードURLが未設定です">
+        <Note>
           ぴよログのアプリの「設定 → データフィード」でフィードを作り、そのURLを、このアプリの設定画面の「育児ログ」→「フィードURL」に保存してください。URLはチャットなどに貼らないでください。
-        </p>
+        </Note>
         <Link href="/settings/">設定画面を開く</Link>
-      </div>
+      </Panel>
     );
   }
 
@@ -111,86 +106,82 @@ export default function IkujiLogScreen({ apiFetch }: FeatureScreenProps) {
   const sleepElapsed = elapsedSince(summary.sleep.since, now);
 
   return (
-    <div className="ikuji">
-      <div className="ikuji-sync">
+    <div className="piyolog-screen">
+      <div className="piyolog-sync">
         <span>
           最終取得 {sync.lastSuccessAt ? timeOf(sync.lastSuccessAt) : "まだありません"}
-          {sync.lastAttemptOk === false && <span className="ikuji-sync__error"> 取得に失敗: {sync.lastError}</span>}
+          {sync.lastAttemptOk === false && <span className="piyolog-sync__error"> 取得に失敗: {sync.lastError}</span>}
         </span>
-        <button type="button" className="button--secondary button--small" disabled={refreshing} onClick={refresh}>
+        <Button variant="secondary" size="small" disabled={refreshing} onClick={refresh}>
           {refreshing ? "取得中…" : "今すぐ更新"}
-        </button>
+        </Button>
       </div>
 
-      <section className="panel ikuji-block">
-        <h2>授乳</h2>
-        <p className="ikuji-big">{feedingElapsed ? `${feedingElapsed}前` : "記録なし"}</p>
+      <Panel title="授乳">
+        <BigValue>{feedingElapsed ? `${feedingElapsed}前` : "記録なし"}</BigValue>
         {summary.feeding.last && (
-          <p className="note">
+          <Note>
             前回 {timeOf(summary.feeding.last.at)}に飲み始め
             {summary.feeding.last.amountMl !== null && ` / ${formatMl(summary.feeding.last.amountMl)}`}
-          </p>
+          </Note>
         )}
-        <div className="ikuji-metrics">
-          <Metric label="今日の回数" value={`${today.feedingCount}回`}>
+        <StatGrid>
+          <Stat label="今日の回数" value={`${today.feedingCount}回`}>
             <Compare summary={summary} pick={(m) => m.feedingCount} unit="count" />
-          </Metric>
-          <Metric label="今日の総量" value={formatMl(today.feedingMl)}>
+          </Stat>
+          <Stat label="今日の総量" value={formatMl(today.feedingMl)}>
             <Compare summary={summary} pick={(m) => m.feedingMl} unit="ml" />
-          </Metric>
-        </div>
-      </section>
+          </Stat>
+        </StatGrid>
+      </Panel>
 
-      <section className="panel ikuji-block">
-        <h2>睡眠</h2>
-        <p className="ikuji-big">
+      <Panel title="睡眠">
+        <BigValue>
           {summary.sleep.state === "sleeping" && sleepElapsed && `睡眠中、${sleepElapsed}経過`}
           {summary.sleep.state === "awake" && sleepElapsed && `起きてから${sleepElapsed}`}
           {summary.sleep.state === "unknown" && "記録なし"}
-        </p>
-        <p className="note">
+        </BigValue>
+        <Note>
           最後に寝た {timeOf(summary.sleep.lastSleepAt)} / 最後に起きた {timeOf(summary.sleep.lastWakeAt)}
-        </p>
-        <div className="ikuji-metrics">
-          <Metric label="今日の睡眠" value={formatMinutes(today.sleepMinutes)}>
+        </Note>
+        <StatGrid>
+          <Stat label="今日の睡眠" value={formatMinutes(today.sleepMinutes)}>
             <Compare summary={summary} pick={(m) => m.sleepMinutes} unit="minutes" />
-          </Metric>
-        </div>
-      </section>
+          </Stat>
+        </StatGrid>
+      </Panel>
 
-      <section className="panel ikuji-block">
-        <h2>おむつ</h2>
-        <p className="ikuji-big">{lastDiaperAt ? `${elapsedSince(lastDiaperAt, now)}前` : "記録なし"}</p>
-        <div className="ikuji-metrics">
-          <Metric label="おしっこ(今日)" value={`${today.peeCount}回`}>
+      <Panel title="おむつ">
+        <BigValue>{lastDiaperAt ? `${elapsedSince(lastDiaperAt, now)}前` : "記録なし"}</BigValue>
+        <StatGrid>
+          <Stat label="おしっこ(今日)" value={`${today.peeCount}回`}>
             <span className="note">最後 {timeOf(summary.pee.lastAt)}</span>
             <Compare summary={summary} pick={(m) => m.peeCount} unit="count" />
-          </Metric>
-          <Metric label="うんち(今日)" value={`${today.poopCount}回`}>
+          </Stat>
+          <Stat label="うんち(今日)" value={`${today.poopCount}回`}>
             <span className="note">最後 {timeOf(summary.poop.lastAt)}</span>
             <Compare summary={summary} pick={(m) => m.poopCount} unit="count" />
-          </Metric>
-        </div>
-      </section>
+          </Stat>
+        </StatGrid>
+      </Panel>
 
-      <p className="note ikuji-footnote">
+      <p className="note piyolog-footnote">
         {summary.comparison
           ? `「いつもより」は、過去${summary.comparison.days}日の同じ時刻までの平均との比較です。`
           : "比較に使える過去のデータが、まだありません(記録がそろった日から比較します)。"}
       </p>
 
-      <section className="panel">
-        <h2>データ</h2>
+      <Panel title="データ">
         {summary.expiry && (
-          <p className="note">
+          <Note>
             フィードURLの期限の目安: {summary.expiry.expiresOn.slice(5).replace("-", "/")}
             {summary.expiry.daysLeft >= 0 ? `(あと${summary.expiry.daysLeft}日)` : "(過ぎています)"}
-          </p>
+          </Note>
         )}
-        <a className="ikuji-download" href="/api/f/piyolog/export.csv" download>
+        <a className="piyolog-download" href="/api/f/piyolog/export.csv" download>
           保存した記録をCSVでダウンロード
         </a>
-      </section>
+      </Panel>
     </div>
   );
 }

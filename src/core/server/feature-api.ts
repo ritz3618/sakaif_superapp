@@ -6,11 +6,13 @@ import type { Context, Hono } from "hono";
 import type { FeatureMeta } from "../shared/feature";
 import type { AppBindings, Env, User } from "./env";
 import type { NotifyRequest, NotifyUserResult } from "./notify";
+import type { SharedData } from "./data";
 import type { FeatureSettings } from "./settings";
 
 export type { AppBindings, Env, User } from "./env";
 export type { NotifyRequest, NotifyUserResult, NotifyOutcome } from "./notify";
 export type { FeatureSettings } from "./settings";
+export type { DataQuery, DataRecord, DataRecordInput, SharedData, SnapshotResult } from "./data";
 export * from "./time";
 
 /** 画面からのリクエストを処理するときに渡される情報 */
@@ -21,6 +23,8 @@ export interface FeatureRequestContext {
   feature: FeatureMeta;
   /** この機能の設定(feature.ts の settings で宣言したもの) */
   settings: FeatureSettings;
+  /** 共通データ。どの出どころも読める。書けるのは、この機能が dataSources で宣言したものだけ。 */
+  data: SharedData;
 }
 
 /** 定期実行(5分おき)のときに渡される情報 */
@@ -31,6 +35,8 @@ export interface FeatureJobContext {
   /** この定期実行の予定時刻 */
   scheduledAt: Date;
   settings: FeatureSettings;
+  /** 共通データ(読み出しは自由、書き込みは宣言した出どころだけ) */
+  data: SharedData;
   /**
    * 通知を送る。オン/オフ、通知を避ける時間帯、重複防止、履歴は共通部分が処理する。
    * 時間帯の間は送られず outcome が "deferred_quiet" になる。次の定期実行で同じ判定をすれば、明けたときに送られる。

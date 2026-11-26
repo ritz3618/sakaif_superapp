@@ -4,6 +4,9 @@
  * ただし、母乳・搾母乳の記録が入った場合も、授乳として数える。
  */
 
+/** 共通データ(core_records)での、この機能の記録の出どころの名前 */
+export const PIYOLOG_SOURCE = "piyolog";
+
 /** 授乳として数える種類 */
 export const FEEDING_TYPES = ["Formula", "ExpressedBreastMilk", "BreastFeeding"] as const;
 /** おむつ替えとして数える種類 */

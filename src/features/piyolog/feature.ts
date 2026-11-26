@@ -15,6 +15,16 @@ export default defineFeature({
     { type: "diaper_due", label: "おむつ替えの経過時間" },
     { type: "feed_expiring", label: "フィードURLの期限" },
   ],
+  // 育児の記録は、ほかの機能でも使えるよう共通データに置く(2026-11-26 ユーザー決定)。
+  // 中身: kind = 公式仕様の type(Formula、Sleep、Pee など)、value/unit = 量や体温など、
+  //       note = メモ、payload = フィードの記録の JSON そのまま、id = event_id。
+  dataSources: [
+    {
+      id: "piyolog",
+      label: "ぴよログの記録",
+      description: "ぴよログのデータフィードから取得した育児の記録(授乳、睡眠、おむつ、体温など)",
+    },
+  ],
   settings: [
     {
       key: "feedingIntervalMinutes",

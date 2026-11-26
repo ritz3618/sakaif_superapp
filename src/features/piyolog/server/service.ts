@@ -1,13 +1,15 @@
-/** 取得、通知、画面用のまとめ(D1 と設定を使う処理の組み立て)。 */
-import type { FeatureJobContext, FeatureSettings } from "../../../core/server/feature-api";
+/**
+ * 取得、通知、画面用のまとめ。
+ * 記録は共通データ(source = "piyolog")に置き、取得の状態だけを、この機能のテーブル(piyolog_state)に置く。
+ */
+import type { DataRecord, DataRecordInput, FeatureJobContext, FeatureSettings, SharedData } from "../../../core/server/feature-api";
 import { DAY_MS, MINUTE_MS, jstDate, jstStartOfDay } from "../../../core/shared/time";
 import type { PiyologSummary } from "../shared/api";
-import { DIAPER_TYPES, FEEDING_TYPES, SLEEP_TYPE, WAKE_TYPE } from "../shared/records";
+import { DIAPER_TYPES, FEEDING_TYPES, PIYOLOG_SOURCE, SLEEP_TYPE, WAKE_TYPE } from "../shared/records";
 import { diaperAlert, expiryAlert, feedExpiry, feedingAlert, type LastRecord } from "./alerts";
-import { FeedError, fetchFeed } from "./feed";
-import { earliestRecordAt, latestOfTypes, readSyncState, recordsSince, writeSyncState, type RecordRow } from "./repo";
+import { FeedError, fetchFeed, type Feed, type FeedRecord } from "./feed";
+import { readSyncState, writeSyncState } from "./repo";
 import { computeStats } from "./stats";
-import { applyFeed, type SyncResult } from "./sync";
 
 /** 429 を受けたあと、取得を控える時間 */
 const PAUSE_AFTER_RATE_LIMIT_MS = 15 * MINUTE_MS;
@@ -27,10 +29,34 @@ export async function feedConfig(settings: FeatureSettings): Promise<FeedConfig>
   return { url: url.value, createdOn };
 }
 
-export type SyncOutcome = { status: "synced"; result: SyncResult } | { status: "paused"; until: string };
+/** フィードの記録を、共通データの形にする(id = event_id、kind = type、note = メモ、payload = 記録そのもの)。 */
+export function toDataRecord(record: FeedRecord): DataRecordInput {
+  const v = record.value;
+  return {
+    id: record.event_id,
+    kind: record.type,
+    recordedAt: record.datetime,
+    value: typeof v?.value === "number" ? v.value : null,
+    unit: typeof v?.unit === "string" ? v.unit : null,
+    note: typeof record.memo === "string" ? record.memo : null,
+    payload: JSON.stringify(record),
+  };
+}
+
+export function feedToSnapshot(feed: Feed) {
+  return { from: feed.from, to: feed.to, records: feed.records.map(toDataRecord) };
+}
+
+export type SyncOutcome = { status: "synced"; written: number; deleted: number } | { status: "paused"; until: string };
 
 /** フィードを取得して保存する。失敗したら状態を記録して、エラーを投げる(URL はどこにも残さない)。 */
-export async function syncFeed(db: D1Database, url: string, now: Date, fetcher?: typeof fetch): Promise<SyncOutcome> {
+export async function syncFeed(
+  db: D1Database,
+  data: SharedData,
+  url: string,
+  now: Date,
+  fetcher?: typeof fetch,
+): Promise<SyncOutcome> {
   const state = await readSyncState(db);
   if (state.pauseUntil && Date.parse(state.pauseUntil) > now.getTime()) {
     return { status: "paused", until: state.pauseUntil };
@@ -38,9 +64,9 @@ export async function syncFeed(db: D1Database, url: string, now: Date, fetcher?:
   const at = now.toISOString();
   try {
     const feed = await fetchFeed(url, fetcher);
-    const result = await applyFeed(db, feed, now);
+    const result = await data.applySnapshot(PIYOLOG_SOURCE, feedToSnapshot(feed));
     await writeSyncState(db, { lastSuccessAt: at, lastAttemptAt: at, lastAttemptOk: true, lastError: null, pauseUntil: null });
-    return { status: "synced", result };
+    return { status: "synced", written: result.written, deleted: result.deleted };
   } catch (error) {
     const message = error instanceof FeedError ? error.message : "フィードの保存中にエラーが起きました";
     const pauseUntil =
@@ -52,9 +78,9 @@ export async function syncFeed(db: D1Database, url: string, now: Date, fetcher?:
   }
 }
 
-function toLast(row: RecordRow | null): LastRecord | null {
-  return row
-    ? { eventId: row.event_id, type: row.type, at: Date.parse(row.recorded_at), value: row.value, unit: row.unit }
+function toLast(record: DataRecord | null): LastRecord | null {
+  return record
+    ? { eventId: record.id, type: record.kind, at: Date.parse(record.recordedAt), value: record.value, unit: record.unit }
     : null;
 }
 
@@ -63,16 +89,16 @@ export async function runScheduledJob(ctx: FeatureJobContext): Promise<void> {
   const config = await feedConfig(ctx.settings);
   if (!config.url) return;
   const now = new Date();
-  await syncFeed(ctx.db, config.url, now);
+  await syncFeed(ctx.db, ctx.data, config.url, now);
 
   // 取得を控えている間など、データが古いときは通知の判定をしない(誤通知を避ける)
   const state = await readSyncState(ctx.db);
-  const fresh = state.lastSuccessAt && now.getTime() - Date.parse(state.lastSuccessAt) <= MAX_DATA_AGE_FOR_ALERTS_MS;
+  const fresh = !!state.lastSuccessAt && now.getTime() - Date.parse(state.lastSuccessAt) <= MAX_DATA_AGE_FOR_ALERTS_MS;
   const [feedingInterval, diaperInterval, lastFeeding, lastDiaper] = await Promise.all([
     ctx.settings.get("feedingIntervalMinutes"),
     ctx.settings.get("diaperIntervalMinutes"),
-    fresh ? latestOfTypes(ctx.db, FEEDING_TYPES) : Promise.resolve(null),
-    fresh ? latestOfTypes(ctx.db, DIAPER_TYPES) : Promise.resolve(null),
+    fresh ? ctx.data.latest(PIYOLOG_SOURCE, FEEDING_TYPES) : Promise.resolve(null),
+    fresh ? ctx.data.latest(PIYOLOG_SOURCE, DIAPER_TYPES) : Promise.resolve(null),
   ]);
   const alerts = [
     fresh ? feedingAlert(toLast(lastFeeding), feedingInterval as number, now.getTime()) : null,
@@ -87,31 +113,36 @@ export async function runScheduledJob(ctx: FeatureJobContext): Promise<void> {
       dedupeKey: alert.dedupeKey,
       title: alert.title,
       body: alert.body,
-      url: alert.type === "feed_expiring" ? "/settings/" : "/piyolog/",
-      tag: `piyolog-${alert.type}`,
+      url: alert.type === "feed_expiring" ? "/settings/" : `/${ctx.feature.id}/`,
+      tag: `${ctx.feature.id}-${alert.type}`,
     });
   }
 }
 
 /** 画面に出すまとめ */
-export async function buildSummary(db: D1Database, settings: FeatureSettings, now: Date): Promise<PiyologSummary> {
+export async function buildSummary(
+  db: D1Database,
+  data: SharedData,
+  settings: FeatureSettings,
+  now: Date,
+): Promise<PiyologSummary> {
   const config = await feedConfig(settings);
   const since = new Date(jstStartOfDay(now).getTime() - 8 * DAY_MS).toISOString();
   const [state, rows, earliest, lastFeeding, lastPee, lastPoop] = await Promise.all([
     readSyncState(db),
-    recordsSince(db, since),
-    earliestRecordAt(db),
-    latestOfTypes(db, FEEDING_TYPES),
-    latestOfTypes(db, ["Pee"]),
-    latestOfTypes(db, ["Poop"]),
+    data.query(PIYOLOG_SOURCE, { from: since }),
+    data.earliestAt(PIYOLOG_SOURCE),
+    data.latest(PIYOLOG_SOURCE, FEEDING_TYPES),
+    data.latest(PIYOLOG_SOURCE, ["Pee"]),
+    data.latest(PIYOLOG_SOURCE, ["Poop"]),
   ]);
-  const records = rows.map((r) => ({ type: r.type, at: Date.parse(r.recorded_at), value: r.value, unit: r.unit }));
+  const records = rows.map((r) => ({ type: r.kind, at: Date.parse(r.recordedAt), value: r.value, unit: r.unit }));
   const stats = computeStats(records, now.getTime(), earliest ? Date.parse(earliest) : null);
 
-  const sleepEvents = rows.filter((r) => r.type === SLEEP_TYPE || r.type === WAKE_TYPE);
+  const sleepEvents = rows.filter((r) => r.kind === SLEEP_TYPE || r.kind === WAKE_TYPE);
   const lastSleepEvent = sleepEvents.at(-1);
-  const lastSleep = [...sleepEvents].reverse().find((r) => r.type === SLEEP_TYPE);
-  const lastWake = [...sleepEvents].reverse().find((r) => r.type === WAKE_TYPE);
+  const lastSleep = [...sleepEvents].reverse().find((r) => r.kind === SLEEP_TYPE);
+  const lastWake = [...sleepEvents].reverse().find((r) => r.kind === WAKE_TYPE);
 
   return {
     configured: config.url !== null,
@@ -125,18 +156,18 @@ export async function buildSummary(db: D1Database, settings: FeatureSettings, no
     feeding: {
       last: lastFeeding
         ? {
-            at: lastFeeding.recorded_at,
+            at: lastFeeding.recordedAt,
             amountMl: lastFeeding.value !== null && lastFeeding.unit === "ml" ? lastFeeding.value : null,
           }
         : null,
     },
-    pee: { lastAt: lastPee?.recorded_at ?? null },
-    poop: { lastAt: lastPoop?.recorded_at ?? null },
+    pee: { lastAt: lastPee?.recordedAt ?? null },
+    poop: { lastAt: lastPoop?.recordedAt ?? null },
     sleep: {
-      state: !lastSleepEvent ? "unknown" : lastSleepEvent.type === SLEEP_TYPE ? "sleeping" : "awake",
-      since: lastSleepEvent?.recorded_at ?? null,
-      lastSleepAt: lastSleep?.recorded_at ?? null,
-      lastWakeAt: lastWake?.recorded_at ?? null,
+      state: !lastSleepEvent ? "unknown" : lastSleepEvent.kind === SLEEP_TYPE ? "sleeping" : "awake",
+      since: lastSleepEvent?.recordedAt ?? null,
+      lastSleepAt: lastSleep?.recordedAt ?? null,
+      lastWakeAt: lastWake?.recordedAt ?? null,
     },
     today: stats.today,
     comparison: stats.comparison,

@@ -3,7 +3,8 @@ import { diaperAlert, expiryAlert, feedExpiry, feedingAlert } from "../src/featu
 import { recordsToCsv } from "../src/features/piyolog/server/csv";
 import { FeedError, fetchFeed, parseFeed, type Feed } from "../src/features/piyolog/server/feed";
 import { computeStats, sleepIntervals, type StatRecord } from "../src/features/piyolog/server/stats";
-import { planSync, type StoredRecordRef } from "../src/features/piyolog/server/sync";
+import { feedToSnapshot } from "../src/features/piyolog/server/service";
+import type { DataRecord } from "../src/core/server/data";
 import { formatMinutes } from "../src/features/piyolog/shared/format";
 import { compare } from "../src/features/piyolog/web/compare";
 
@@ -83,43 +84,14 @@ describe("フィードの取得", () => {
   });
 });
 
-describe("保存の計画(変わったものだけ書く、範囲内で消えたものは論理削除)", () => {
-  const feed: Feed = parseFeed(SAMPLE);
-  const stored = (id: string, raw: string, at: string, deleted: string | null = null): StoredRecordRef => ({
-    event_id: id,
-    raw,
-    recorded_at: at,
-    deleted_at: deleted,
-  });
-
-  it("新しい記録と変わった記録だけを書き、同じものは書かない", () => {
-    const same = JSON.stringify(SAMPLE.records[0]);
-    const plan = planSync(feed, [
-      stored("example-001", same, "2026-09-08T07:00:00.000Z"),
-      stored("example-003", '{"old":true}', "2026-09-09T01:00:00.000Z"),
-    ]);
-    expect(plan.upserts.map((r) => r.eventId)).toEqual(["example-003", "example-004"]);
-    expect(plan.upserts.find((r) => r.eventId === "example-004")?.memo).toBe("Packed a spare outfit.");
-  });
-
-  it("範囲の中で消えた記録は削除の印、範囲の外の記録はそのまま", () => {
-    const plan = planSync(feed, [
-      stored("gone-in-range", "{}", "2026-09-08T10:00:00.000Z"),
-      stored("old-out-of-range", "{}", "2026-09-07T10:00:00.000Z"),
-      stored("already-deleted", "{}", "2026-09-08T11:00:00.000Z", "2026-09-08T12:00:00.000Z"),
-    ]);
-    expect(plan.deletes).toEqual(["gone-in-range"]);
-  });
-
-  it("削除の印が付いた記録が再び現れたら、書き直して印を外す", () => {
-    const raw = JSON.stringify(SAMPLE.records[0]);
-    const plan = planSync(feed, [stored("example-001", raw, "2026-09-08T07:00:00.000Z", "2026-09-08T09:00:00.000Z")]);
-    expect(plan.upserts.map((r) => r.eventId)).toContain("example-001");
-  });
-
-  it("ミルクの量は value と unit に分けて保存する", () => {
-    const formula = planSync(feed, []).upserts.find((r) => r.eventId === "example-001")!;
-    expect([formula.type, formula.value, formula.unit]).toEqual(["Formula", 120, "ml"]);
+describe("共通データへの変換", () => {
+  it("フィードの記録を、共通データの形(id=event_id、kind=type、note=メモ、payload=記録そのもの)にする", () => {
+    const snapshot = feedToSnapshot(parseFeed(SAMPLE));
+    expect(snapshot.from).toBe("2026-09-08T03:00:00.000Z");
+    const formula = snapshot.records.find((r) => r.id === "example-001")!;
+    expect([formula.kind, formula.value, formula.unit, formula.note]).toEqual(["Formula", 120, "ml", "Finished the bottle."]);
+    expect(JSON.parse(formula.payload!).event_id).toBe("example-001");
+    expect(snapshot.records.find((r) => r.id === "example-004")?.value).toBeNull();
   });
 });
 
@@ -207,10 +179,12 @@ describe("表示", () => {
   });
 
   it("CSV は BOM 付き、日本時間、カンマや引用符を含むメモも正しく書く", () => {
-    const csv = recordsToCsv([
-      { event_id: "e1", type: "Formula", recorded_at: "2026-11-26T01:05:00.000Z", value: 120, unit: "ml", memo: 'よく飲んだ, "完飲"', deleted_at: null },
-      { event_id: "e2", type: "Custom3", recorded_at: "2026-11-26T02:00:00.000Z", value: null, unit: null, memo: null, deleted_at: "2026-11-26T03:00:00.000Z" },
-    ]);
+    const base = { source: "piyolog", payload: null, firstSeenAt: "", updatedAt: "" };
+    const rows: DataRecord[] = [
+      { ...base, id: "e1", kind: "Formula", recordedAt: "2026-11-26T01:05:00.000Z", value: 120, unit: "ml", note: 'よく飲んだ, "完飲"', deletedAt: null },
+      { ...base, id: "e2", kind: "Custom3", recordedAt: "2026-11-26T02:00:00.000Z", value: null, unit: null, note: null, deletedAt: "2026-11-26T03:00:00.000Z" },
+    ];
+    const csv = recordsToCsv(rows);
     expect(csv.startsWith("﻿日時(日本時間),種類")).toBe(true);
     expect(csv).toContain('2026-11-26 10:05:00,ミルク,Formula,120,ml,"よく飲んだ, ""完飲""",e1,');
     expect(csv).toContain("2026-11-26 11:00:00,カスタム3,Custom3,,,,e2,削除済み");

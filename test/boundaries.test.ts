@@ -7,6 +7,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
+import { registeredFeatures } from "../src/features/registry";
 
 const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
@@ -48,6 +49,16 @@ describe("境界のルール", () => {
     expect(violations).toEqual([]);
   });
 
+  it("core には、個別の機能の名前やIDを書かない(コメントも含む)", () => {
+    const words = registeredFeatures.flatMap(({ meta, folder }) => [meta.id, meta.name, folder]);
+    const coreFiles = listFiles(join(SRC, "core"), /\.(ts|tsx|css|sql)$/);
+    const violations = coreFiles.flatMap((f) => {
+      const text = readFileSync(f, "utf8");
+      return words.filter((w) => text.includes(w)).map((w) => `${relative(SRC, f)}: ${w}`);
+    });
+    expect(violations).toEqual([]);
+  });
+
   it("機能は、ほかの機能を読み込まず、core は決められた入口だけを使う", () => {
     const allowedCore = [/^core\/shared\//, /^core\/server\/feature-api$/, /^core\/web\/feature-api$/];
     const violations: string[] = [];
@@ -61,6 +72,26 @@ describe("境界のルール", () => {
         if (target.startsWith(`features/${folder}/`)) continue;
         if (allowedCore.some((re) => re.test(target))) continue;
         violations.push(`${rel.join("/")} → ${target}`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("機能の CSS は、その機能の中だけに効く書き方にする(クラス名の接頭辞か data-feature)", () => {
+    const violations: string[] = [];
+    for (const f of listFiles(join(SRC, "features"), /\.css$/)) {
+      const rel = relative(SRC, f).split(sep);
+      const folder = rel[1]!;
+      const ids = registeredFeatures.filter((r) => r.folder === folder).map((r) => r.meta.id);
+      const allowed = [`.${folder}-`, ...ids.map((id) => `[data-feature="${id}"]`)];
+      // コメントを除き、「{」の前にある選択子を取り出す(@media などの行は除く)
+      const text = readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      for (const m of text.matchAll(/([^{};]+)\{/g)) {
+        const selectorText = m[1]!.trim();
+        if (selectorText.startsWith("@")) continue;
+        for (const selector of selectorText.split(",").map((x) => x.trim())) {
+          if (!allowed.some((prefix) => selector.startsWith(prefix))) violations.push(`${rel.join("/")}: ${selector}`);
+        }
       }
     }
     expect(violations).toEqual([]);

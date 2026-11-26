@@ -23,7 +23,7 @@ export interface NotifyRequest extends NotificationPayload {
   type: string;
   /** "all" は登録済みの全員。ユーザーIDの配列で個別に指定もできる。 */
   to: "all" | readonly number[];
-  /** 同じキーの通知は、そのユーザーに送信済みなら二度と送らない(例: "feeding:<最後の授乳の event_id>") */
+  /** 同じキーの通知は、そのユーザーに送信済みなら二度と送らない(例: "<判定の種類>:<最後の記録のID>") */
   dedupeKey?: string;
   /** true なら、通知を避ける時間帯でも送る(テスト通知など) */
   ignoreQuietHours?: boolean;

@@ -15,6 +15,7 @@ import { base64UrlToBytes } from "../encoding";
 import type { AppBindings } from "../env";
 import { parsePngSize } from "../png";
 import { iconUrl, type IconSize, type PwaTarget } from "../pwa";
+import { ownedSources, sharedData } from "../data";
 import { featureSettings, type SettingsNamespace } from "../settings";
 
 const ORDER_KEY = "homeOrder";
@@ -67,6 +68,7 @@ export function registerHomeRoutes(
               user,
               feature: f,
               settings: featureSettings(db, registry, f.id),
+              data: sharedData(db, ownedSources(f)),
             });
           } catch (error) {
             console.error(`[home] ${f.id} の要約を作れませんでした`, error);
