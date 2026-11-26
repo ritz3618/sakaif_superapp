@@ -30,6 +30,10 @@ export type SettingDef =
   | (SettingBase & { type: "timeRanges"; default: TimeRange[] })
   | (SettingBase & { type: "date"; default: string | null })
   | (SettingBase & { type: "text"; default: string })
+  /** 数値(単位付き)。default が null なら「未設定」から始まり、クリアもできる */
+  | (SettingBase & { type: "number"; default: number | null; unit?: string; min?: number; max?: number; step?: number })
+  /** 選択肢から1つ選ぶ */
+  | (SettingBase & { type: "select"; default: string; options: { value: string; label: string }[] })
   /** 秘密の値(フィードURLなど)。入力はできるが、画面には「設定済み」としか出さない。 */
   | (SettingBase & { type: "secret" });
 
@@ -88,6 +92,17 @@ export function validateSettingValue(def: SettingDef, input: unknown): Validatio
       }
       return { ok: true, value: input };
     }
+    case "number": {
+      if (input === null) return def.default === null ? { ok: true, value: null } : fail("数値を入れてください");
+      if (typeof input !== "number" || !Number.isFinite(input)) return fail("数値で指定してください");
+      const unit = def.unit ?? "";
+      if (def.min !== undefined && input < def.min) return fail(`${def.min}${unit}以上で指定してください`);
+      if (def.max !== undefined && input > def.max) return fail(`${def.max}${unit}以下で指定してください`);
+      return { ok: true, value: input };
+    }
+    case "select":
+      if (typeof input !== "string" || !def.options.some((o) => o.value === input)) return fail("選択肢から選んでください");
+      return { ok: true, value: input };
     case "text":
       if (typeof input !== "string") return fail("文字で指定してください");
       if (input.length > 500) return fail("500文字までです");

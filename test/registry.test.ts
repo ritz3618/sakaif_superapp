@@ -9,17 +9,7 @@ import { featureServers } from "../src/features/registry.server";
 
 describe("機能レジストリ", () => {
   it("ホームには、育児ログとダミー1〜8の合計9個が、この順に並ぶ", () => {
-    expect(features.map((f) => f.name)).toEqual([
-      "育児ログ",
-      "ダミー1",
-      "ダミー2",
-      "ダミー3",
-      "ダミー4",
-      "ダミー5",
-      "ダミー6",
-      "ダミー7",
-      "ダミー8",
-    ]);
+    expect(features.map((f) => f.name)).toEqual(["育児ログ", ...Array.from({ length: 8 }, (_, i) => `ダミー${i + 1}`)]);
   });
 
   it("宣言に誤りがない", () => {

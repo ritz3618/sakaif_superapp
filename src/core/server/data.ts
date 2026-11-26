@@ -60,6 +60,8 @@ export interface SharedDataReader {
   latest(source: string, kinds?: readonly string[]): Promise<DataRecord | null>;
   /** いちばん古い記録の日時(削除の印が付いたものは除く) */
   earliestAt(source: string): Promise<string | null>;
+  /** 記録の件数と、いちばん古い・新しい記録の日時(削除の印が付いたものは除く) */
+  stats(source: string): Promise<{ count: number; earliestAt: string | null; latestAt: string | null }>;
 }
 
 /** 読み出しと、自分が宣言した source への書き込み */
@@ -212,6 +214,15 @@ function reader(db: D1Database): SharedDataReader {
         .bind(source)
         .first<{ at: string | null }>();
       return row?.at ?? null;
+    },
+    async stats(source) {
+      const row = await db
+        .prepare(
+          "SELECT COUNT(*) AS count, MIN(recorded_at) AS earliest, MAX(recorded_at) AS latest FROM core_records WHERE source = ? AND deleted_at IS NULL",
+        )
+        .bind(source)
+        .first<{ count: number; earliest: string | null; latest: string | null }>();
+      return { count: row?.count ?? 0, earliestAt: row?.earliest ?? null, latestAt: row?.latest ?? null };
     },
   };
 }
