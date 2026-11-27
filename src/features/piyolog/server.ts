@@ -5,6 +5,7 @@
  * - 画面用の API: GET /summary、POST /refresh(今すぐ取得)、GET /data-info、POST /import(月ごとのテキストの取り込み)、
  *   GET /day・GET /week(過去の日の表示)、GET /charts(グラフ)、GET /export.csv、GET /room(室温・湿度の状態)、GET /room/devices(SwitchBot の機器の確認)
  */
+import { jstTime } from "../../core/shared/time";
 import { defineFeatureServer, featureContext, formatMinutesFromIso } from "./server/helpers";
 import { readRoomState, readSyncState } from "./server/repo";
 import { buildRoomSummary, checkDevices, fetchReading } from "./server/room";
@@ -133,18 +134,21 @@ export default defineFeatureServer({
     });
   },
 
-  /** ホームのカードの1行(例: 「授乳 2時間10分前・おむつ 45分前」) */
+  /** ホームのカードの1行(例: 「授乳 2時間10分前(次 11:40)・おむつ 45分前」) */
   async homeSummary(ctx) {
     const config = await feedConfig(ctx.settings);
     if (!config.url) return "フィードURLが未設定";
-    const [feeding, diaper] = await Promise.all([
+    const [feeding, diaper, interval] = await Promise.all([
       ctx.data.latest(PIYOLOG_SOURCE, FEEDING_TYPES),
       ctx.data.latest(PIYOLOG_SOURCE, DIAPER_TYPES),
+      ctx.settings.get("feedingIntervalMinutes"),
     ]);
     const now = Date.now();
     const part = (label: string, iso: string | undefined) =>
       iso ? `${label} ${formatMinutesFromIso(iso, now)}前` : `${label} 記録なし`;
-    return `${part("授乳", feeding?.recordedAt)}・${part("おむつ", diaper?.recordedAt)}`;
+    // 次の授乳の目安(前回の飲み始め + 授乳の間隔)
+    const next = feeding ? `(次 ${jstTime(new Date(Date.parse(feeding.recordedAt) + (interval as number) * 60_000))})` : "";
+    return `${part("授乳", feeding?.recordedAt)}${next}・${part("おむつ", diaper?.recordedAt)}`;
   },
 
   scheduled: {

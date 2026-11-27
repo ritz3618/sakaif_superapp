@@ -19,7 +19,7 @@ import {
   type FeatureScreenProps,
 } from "../../core/web/feature-api";
 import type { DayMetrics, LatestValue, PiyologSummary } from "./shared/api";
-import { jstDate, jstMinuteOfDay } from "../../core/shared/time";
+import { jstDate, jstMinuteOfDay, jstTime } from "../../core/shared/time";
 import { formatMinutes, formatMl, minutesBetween } from "./shared/format";
 import { compare, isShort, type CompareUnit } from "./web/compare";
 import DataPage from "./web/DataPage";
@@ -93,15 +93,38 @@ function MainScreen({ apiFetch, feature, nav }: FeatureScreenProps & { nav: Reac
     }
   }, [apiFetch, setSummary]);
 
+  /**
+   * 開いたとき・アプリが裏から戻ったときに、最新の記録を裏で取りに行く(2026-11-27 ユーザー)。
+   * 画面は保存済みの内容をすぐ出し、届いたら差し替える。ぴよログ・SwitchBot へ取りに行くのは、
+   * サーバー側で1分に1回まで(夫婦の端末と定期実行で共通)なので、何度開いても回数は増えない。
+   */
+  const pull = useCallback(async () => {
+    try {
+      const res = await apiFetch("/refresh", { method: "POST" });
+      setSummary((await res.json()) as PiyologSummary);
+      setNow(Date.now());
+    } catch {
+      // フィードURLが未設定などのときは、保存済みの内容のまま
+    }
+  }, [apiFetch, setSummary]);
+
   useEffect(() => {
-    void load();
+    void load().then(() => pull());
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setNow(Date.now());
+        void pull();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
     const dataTimer = window.setInterval(() => void load(), 60_000);
     const clockTimer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => {
+      document.removeEventListener("visibilitychange", onVisible);
       window.clearInterval(dataTimer);
       window.clearInterval(clockTimer);
     };
-  }, [load]);
+  }, [load, pull]);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -138,6 +161,8 @@ function MainScreen({ apiFetch, feature, nav }: FeatureScreenProps & { nav: Reac
   const lastFeedingAt = summary.feeding.last?.at ?? null;
   const feedingMinutes = lastFeedingAt ? minutesBetween(Date.parse(lastFeedingAt), now) : null;
   const feedingOverdue = feedingMinutes !== null && feedingMinutes >= summary.feeding.intervalMinutes;
+  // 次の授乳の目安 = 前回の飲み始め + 設定の授乳の間隔(2026-11-27 ユーザー)
+  const nextFeedingAt = lastFeedingAt ? Date.parse(lastFeedingAt) + summary.feeding.intervalMinutes * 60_000 : null;
   const lastDiaperAt = [summary.pee.lastAt, summary.poop.lastAt].filter(Boolean).sort().at(-1) ?? null;
   const perFeedingToday = today.feedingMlCount > 0 ? today.feedingMl / today.feedingMlCount : null;
   // 「今の時刻まで」は過去7日の同じ時刻までの平均、「1日」は過去7日の1日分の平均と比べる(2026-11-26 ユーザー確認)
@@ -190,7 +215,15 @@ function MainScreen({ apiFetch, feature, nav }: FeatureScreenProps & { nav: Reac
           {summary.feeding.last
             ? `前回 ${timeOf(summary.feeding.last.at)}${summary.feeding.last.amountMl !== null ? ` ${formatMl(summary.feeding.last.amountMl)}` : ""}`
             : ""}
-          {feedingOverdue && <strong className="piyolog-alert"> ⚠ 基準の{formatMinutes(summary.feeding.intervalMinutes)}を過ぎています</strong>}
+          {nextFeedingAt !== null &&
+            !feedingOverdue &&
+            ` ・ 次の目安 ${jstTime(new Date(nextFeedingAt))}(あと${formatMinutes(minutesBetween(now, nextFeedingAt))})`}
+          {feedingOverdue && nextFeedingAt !== null && (
+            <strong className="piyolog-alert">
+              {" "}
+              ⚠ 次の目安 {jstTime(new Date(nextFeedingAt))} を{formatMinutes(minutesBetween(nextFeedingAt, now))}過ぎています
+            </strong>
+          )}
         </p>
         <PaceBar
           label="今日の量"
