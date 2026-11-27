@@ -179,11 +179,11 @@ export function timelineDay(
   };
 }
 
-/** 今日・昨日・2日前の時間の帯 */
+/** 時間の帯(今日を含む7日分、新しい順。2026-11-27 ユーザー) */
 export function computeTimeline(records: readonly StatRecord[], now: number, earliestAt: number | null): TimelineDay[] {
   const intervals = sleepIntervals(records, now);
   const todayStart = jstStartOfDay(new Date(now)).getTime();
-  return [0, 1, 2].map((d) => {
+  return [0, 1, 2, 3, 4, 5, 6].map((d) => {
     const start = todayStart - d * DAY_MS;
     return timelineDay(records, intervals, start, d === 0 ? now : start + DAY_MS, earliestAt);
   });

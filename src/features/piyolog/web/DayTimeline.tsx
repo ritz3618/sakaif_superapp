@@ -1,5 +1,5 @@
 /**
- * 今日・昨日・2日前の時間の帯(0〜24時)。
+ * 1週間(今日を含む7日分)の時間の帯(0〜24時)。
  * 寝ている時間と起きている時間を背景に、授乳(飲み始めから30分)とうんち(15分)を、帯の下半分に印として重ねる。
  * 色は web/piyolog.css の変数で決める。
  */
@@ -40,11 +40,11 @@ function toRow(day: TimelineDay, label: string, marker?: number): TimelineRow {
   return { label, segments, until: day.until, marker };
 }
 
-const DAY_LABELS = ["今日", "昨日", "2日前"];
+const dayLabel = (i: number) => (i === 0 ? "今日" : i === 1 ? "昨日" : `${i}日前`);
 
 export function DayTimeline({ days, nowMinute }: { days: readonly TimelineDay[]; nowMinute?: number }) {
   const rows: TimelineRow[] = days.map((day, i) =>
-    toRow(day, `${DAY_LABELS[i] ?? ""}\n${shortDate(day.date)}`, i === 0 ? nowMinute : undefined),
+    toRow(day, `${dayLabel(i)}\n${shortDate(day.date)}`, i === 0 ? nowMinute : undefined),
   );
   return (
     <div className="piyolog-timeline">

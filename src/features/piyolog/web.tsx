@@ -1,7 +1,7 @@
 /**
  * 育児ログの画面。
  * - メイン(/<機能ID>/): 授乳・睡眠・おむつの今の状態と、今日を「ふだん」(過去7日の平均)や目安と比べた表示
- *   (この3つは1画面に収める)、室温・湿度、最近の体温・体重・身長・お風呂、今日・昨日・2日前の時間の帯。
+ *   (この3つは1画面に収める)、室温・湿度、最近の体温・体重・身長・お風呂、1週間(今日を含む7日分)の時間の帯。
  * - データの管理(/<機能ID>/data/): 過去の記録の取り込み、CSV の書き出し。
  * 経過時間は30秒ごと、データは1分ごとに更新する。
  * 見た目は共通の部品(Panel、PaceBar など)で作り、この機能だけの調整は web/piyolog.css に書く。
@@ -339,7 +339,7 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
         </StatGrid>
       </Panel>
 
-      <Panel title="今日・昨日・2日前">
+      <Panel title="1週間の過ごし方">
         <DayTimeline days={summary.timeline} nowMinute={summary.timeline[0]?.until} />
       </Panel>
 
