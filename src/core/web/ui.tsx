@@ -285,56 +285,46 @@ export function FileButton({
   );
 }
 
-export interface BulletMark {
-  value: number;
-  /** typical: ふだんの値などの参考(点線)、target: 目安(太い線) */
-  kind: "typical" | "target";
-  /** 右側に出す説明(例: 「ふだん 509ml」) */
-  label: ReactNode;
-  /** 今の値との差の向き(色に使う) */
-  direction?: TrendDirection;
-}
-
 /**
- * 1本の横棒で、今の値と、参考の値・目安を重ねて見せる(ブレット・グラフ)。
- * 棒 = 今の値、点線 = 参考(ふだん)、太い線 = 目安。
+ * 1日の中での進み具合を、1本の棒で見せる(今の値は1回だけ書く)。
+ * - 棒の右端 = 1日の基準(goal。目安やふだんの1日分)
+ * - 塗り = 今の値
+ * - 点線 = 今の時刻までの基準(pace。ふだんの同じ時刻まで、など)
+ * behind(今の時刻までの基準より少ない)なら、塗りを注意の色にする。
  */
-export function BulletBar({
+export function PaceBar({
   label,
   value,
   valueText,
-  marks,
-  warning,
+  goal,
+  pace,
+  behind = false,
+  children,
 }: {
   label: ReactNode;
   value: number;
   valueText: ReactNode;
-  marks: readonly BulletMark[];
-  warning?: ReactNode;
+  goal: { value: number; label: ReactNode } | null;
+  pace: number | null;
+  behind?: boolean;
+  /** 棒の下に出す説明(差など) */
+  children?: ReactNode;
 }) {
-  const max = Math.max(value, ...marks.map((m) => m.value), 1) * 1.08;
-  const pct = (v: number) => `${(Math.max(0, v) / max) * 100}%`;
+  const max = goal && goal.value > 0 ? Math.max(goal.value, value) : Math.max(value, pace ?? 0, 1) * 1.2;
+  const pct = (v: number) => `${Math.min(100, (Math.max(0, v) / max) * 100)}%`;
   return (
-    <div className={cx("ui-bullet", warning != null && "ui-bullet--warn")}>
-      <div className="ui-bullet__head">
-        <span className="ui-bullet__label">{label}</span>
-        <span className="ui-bullet__value">{valueText}</span>
-        <span className="ui-bullet__marks">
-          {marks.map((m, i) => (
-            <span key={i} className={cx("ui-bullet__mark-label", m.direction && `ui-trend--${m.direction}`)}>
-              <span className={`ui-bullet__key ui-bullet__key--${m.kind}`} aria-hidden="true" />
-              {m.label}
-            </span>
-          ))}
-        </span>
+    <div className={cx("ui-pace", behind && "ui-pace--behind")}>
+      <div className="ui-pace__head">
+        <span className="ui-pace__label">{label}</span>
+        <span className="ui-pace__value">{valueText}</span>
+        {goal && <span className="ui-pace__goal">{goal.label}</span>}
       </div>
-      <div className="ui-bullet__track">
-        <span className="ui-bullet__bar" style={{ width: pct(value) }} />
-        {marks.map((m, i) => (
-          <span key={i} className={`ui-bullet__mark ui-bullet__mark--${m.kind}`} style={{ left: pct(m.value) }} />
-        ))}
+      <div className="ui-pace__track">
+        <span className="ui-pace__bar" style={{ width: pct(value) }} />
+        {goal && <span className="ui-pace__goal-mark" style={{ left: pct(goal.value) }} />}
+        {pace !== null && <span className="ui-pace__pace" style={{ left: pct(pace) }} />}
       </div>
-      {warning != null && <span className="ui-bullet__warning">⚠ {warning}</span>}
+      {children && <div className="ui-pace__detail">{children}</div>}
     </div>
   );
 }

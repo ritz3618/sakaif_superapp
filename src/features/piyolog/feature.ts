@@ -39,6 +39,7 @@ export default defineFeature({
   settings: [
     {
       key: "feedingIntervalMinutes",
+      group: "授乳",
       label: "授乳の通知の間隔",
       description: "最後の授乳(飲み始め)からこの時間がたったら、通知します(夫婦共通)。",
       scope: "shared",
@@ -48,18 +49,8 @@ export default defineFeature({
       max: 720,
     },
     {
-      key: "activityLimitMinutes",
-      label: "活動限界",
-      description:
-        "起きてから続けて活動できる時間の目安です(夫婦共通)。画面に「活動限界まであと○分」と出し、過ぎたら通知します。",
-      scope: "shared",
-      type: "minutes",
-      default: 180,
-      min: 30,
-      max: 720,
-    },
-    {
       key: "dailyFeedingTargetMl",
+      group: "授乳",
       label: "授乳の1日の目安量",
       description:
         "1日(0時〜24時)に飲む量の目安です(夫婦共通)。画面で、今日の量がこの目安に届いているかを表示します。未設定のときは、過去7日の1日あたりの平均と比べます。",
@@ -72,7 +63,20 @@ export default defineFeature({
       step: 10,
     },
     {
+      key: "activityLimitMinutes",
+      group: "睡眠",
+      label: "活動限界",
+      description:
+        "起きてから続けて活動できる時間の目安です(夫婦共通)。画面に「活動限界まであと○分」と出し、過ぎたら通知します。",
+      scope: "shared",
+      type: "minutes",
+      default: 180,
+      min: 30,
+      max: 720,
+    },
+    {
       key: "diaperIntervalMinutes",
+      group: "おむつ",
       label: "おむつ替えの通知の間隔",
       description: "最後のおしっこ・うんちの記録からこの時間がたったら、通知します(夫婦共通)。",
       scope: "shared",
@@ -82,24 +86,8 @@ export default defineFeature({
       max: 720,
     },
     {
-      key: "feedUrl",
-      label: "フィードURL",
-      description:
-        "ぴよログの「設定 → データフィード」で作ったURLを貼り付けます。URLはパスワードと同じ扱いで、保存後は画面に表示しません。",
-      scope: "shared",
-      type: "secret",
-    },
-    {
-      key: "feedCreatedOn",
-      label: "フィードの作成日(任意)",
-      description:
-        "フィードの期限(作成日から89日)の計算に使います。入れない場合は、URLを保存した日を作成日とみなします。",
-      scope: "shared",
-      type: "date",
-      default: null,
-    },
-      {
       key: "switchbotToken",
+      group: "室温・湿度",
       label: "SwitchBot のトークン",
       description:
         "室温・湿度の表示に使います。SwitchBot のアプリの「プロフィール → 設定 → アプリについて」で、アプリのバージョンを10回たたくと出る「開発者向けオプション」から取得します。パスワードと同じ扱いで、保存後は画面に表示しません。",
@@ -108,6 +96,7 @@ export default defineFeature({
     },
     {
       key: "switchbotSecret",
+      group: "室温・湿度",
       label: "SwitchBot のクライアントシークレット",
       description: "トークンと同じ画面にある、もう1つの値です。保存後は画面に表示しません。",
       scope: "shared",
@@ -115,6 +104,7 @@ export default defineFeature({
     },
     {
       key: "switchbotDeviceName",
+      group: "室温・湿度",
       label: "室温・湿度を読む機器の名前(任意)",
       description:
         "温湿度を測れる機器(Hub 2、温湿度計など)が複数あるときに、SwitchBot のアプリでの名前を入れます。空のときは、最初に見つかった機器を使います。",
@@ -124,6 +114,7 @@ export default defineFeature({
     },
     {
       key: "roomTemperatureLow",
+      group: "室温・湿度",
       label: "室温の下限",
       description: "これより低いと注意を出します。画面の注意の表示と、通知の両方に使います(夫婦共通)。",
       scope: "shared",
@@ -136,6 +127,7 @@ export default defineFeature({
     },
     {
       key: "roomTemperatureHigh",
+      group: "室温・湿度",
       label: "室温の上限(任意)",
       description: "これより高いと注意を出します。未設定なら使いません。画面の注意の表示と、通知の両方に使います(夫婦共通)。",
       scope: "shared",
@@ -148,6 +140,7 @@ export default defineFeature({
     },
     {
       key: "roomHumidityLow",
+      group: "室温・湿度",
       label: "湿度の下限",
       description: "これより低いと注意を出します。画面の注意の表示と、通知の両方に使います(夫婦共通)。",
       scope: "shared",
@@ -160,6 +153,7 @@ export default defineFeature({
     },
     {
       key: "roomHumidityHigh",
+      group: "室温・湿度",
       label: "湿度の上限(任意)",
       description: "これより高いと注意を出します。未設定なら使いません。画面の注意の表示と、通知の両方に使います(夫婦共通)。",
       scope: "shared",
@@ -172,6 +166,7 @@ export default defineFeature({
     },
     {
       key: "roomAlertTarget",
+      group: "室温・湿度",
       label: "室温・湿度の通知",
       description: "基準の外になったときに通知する対象です(夫婦共通)。初期値はオフです。",
       scope: "shared",
@@ -186,6 +181,7 @@ export default defineFeature({
     },
     {
       key: "roomAlertAfterMinutes",
+      group: "室温・湿度",
       label: "室温・湿度を通知するまでの時間",
       description:
         "基準の外の状態がこの時間続いたら、通知します。0分にすると、基準の外になったらすぐに通知します(同じ状態が続く間は1回だけ)。",
@@ -194,6 +190,25 @@ export default defineFeature({
       default: 30,
       min: 0,
       max: 180,
+    },
+    {
+      key: "feedUrl",
+      group: "ぴよログのフィード",
+      label: "フィードURL",
+      description:
+        "ぴよログの「設定 → データフィード」で作ったURLを貼り付けます。URLはパスワードと同じ扱いで、保存後は画面に表示しません。",
+      scope: "shared",
+      type: "secret",
+    },
+    {
+      key: "feedCreatedOn",
+      group: "ぴよログのフィード",
+      label: "フィードの作成日(任意)",
+      description:
+        "フィードの期限(作成日から89日)の計算に使います。入れない場合は、URLを保存した日を作成日とみなします。",
+      scope: "shared",
+      type: "date",
+      default: null,
     },
   ],
 });

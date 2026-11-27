@@ -22,6 +22,8 @@ interface SettingBase {
   label: string;
   description?: string;
   scope: SettingScope;
+  /** 設定画面で、まとめて見出しを付ける単位(例: 「睡眠」)。同じ group の項目は並べて書く */
+  group?: string;
 }
 
 export type SettingDef =
