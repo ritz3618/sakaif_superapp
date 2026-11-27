@@ -4,8 +4,9 @@
  * 使っている機器と取得の状態だけを、この機能のテーブル(piyolog_state の "switchbot")に置く。
  */
 import type { DataRecordInput, FeatureJobContext, FeatureSettings, SharedData } from "../../../core/server/feature-api";
-import { DAY_MS, MINUTE_MS } from "../../../core/shared/time";
+import { DAY_MS, MINUTE_MS, jstDate, jstDayStart, jstStartOfDay } from "../../../core/shared/time";
 import { ROOM_SOURCE } from "../shared/records";
+import type { MetricDayStats, RoomDayStats } from "../shared/api";
 import type { DeviceCheck, Metric, RoomSummary, Thresholds } from "../shared/room-api";
 import { evaluate } from "../shared/room-thresholds";
 import { readRoomState as readState, writeRoomState as writeState, type RoomState } from "./repo";
@@ -100,8 +101,17 @@ export async function fetchReading(
 /** 5分おきの定期実行の室温・湿度の部分。トークンが未設定なら、何もしない(失敗ではない) */
 export async function runRoomJob(ctx: FeatureJobContext): Promise<void> {
   const now = new Date();
+  // まとめ直しが失敗しても、今の値の取得は続ける(失敗は最後に報告する)
+  let rollupError: unknown = null;
+  await rollupOldReadings(ctx.data, now).catch((e: unknown) => {
+    rollupError = e;
+  });
   const fetched = await fetchReading(ctx.db, ctx.data, ctx.settings, now);
-  if (!fetched) return;
+  if (fetched) await checkRoomAlerts(ctx, now);
+  if (rollupError) throw rollupError;
+}
+
+async function checkRoomAlerts(ctx: FeatureJobContext, now: Date): Promise<void> {
   const [target, afterMinutes, t] = await Promise.all([
     ctx.settings.get("roomAlertTarget"),
     ctx.settings.get("roomAlertAfterMinutes"),
@@ -126,6 +136,74 @@ export async function runRoomJob(ctx: FeatureJobContext): Promise<void> {
       tag: `${ctx.feature.id}-${alert.type}`,
     });
   }
+}
+
+// ---- 古い値のまとめ直しと、1日の最低・最高・平均(2026-11-27 ユーザー決定) ----
+
+/** 5分ごとの値を残す日数。これより古い日は、1日ごとの最低・最高・平均にまとめて、元の値を消す */
+export const RAW_RETENTION_DAYS = 30;
+/** 1日ごとにまとめた記録の種類(例: "temperature_daily")。value = 平均、payload = { min, max, avg, count } */
+export const dailyKind = (metric: Metric) => `${metric}_daily`;
+
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+/**
+ * 30日より古い日の細かい値を、1日分ずつまとめ直す(1回の定期実行で1日分。処理を軽く保つため)。
+ * まとめた記録を書いてから、元の値を消す。
+ */
+export async function rollupOldReadings(data: SharedData, now: Date): Promise<string | null> {
+  const cutoff = new Date(jstStartOfDay(now).getTime() - RAW_RETENTION_DAYS * DAY_MS);
+  const [oldest] = await data.query(ROOM_SOURCE, { kinds: METRICS, to: cutoff.toISOString(), order: "asc", limit: 1 });
+  if (!oldest) return null;
+  const day = jstDate(new Date(oldest.recordedAt));
+  const from = jstDayStart(day);
+  const to = new Date(from.getTime() + DAY_MS);
+  const stats = await data.aggregate(ROOM_SOURCE, { kinds: METRICS, from: from.toISOString(), to: to.toISOString() });
+  const records: DataRecordInput[] = stats
+    .filter((a) => a.count > 0 && a.min !== null && a.max !== null && a.avg !== null)
+    .map((a) => ({
+      id: `daily:${a.kind}:${day}`,
+      kind: dailyKind(a.kind as Metric),
+      recordedAt: from.toISOString(),
+      value: round1(a.avg!),
+      unit: UNITS[a.kind as Metric],
+      payload: JSON.stringify({ min: a.min, max: a.max, avg: round1(a.avg!), count: a.count }),
+    }));
+  if (records.length > 0) await data.upsert(ROOM_SOURCE, records);
+  await data.purge(ROOM_SOURCE, { kinds: METRICS, from: from.toISOString(), to: to.toISOString() });
+  return day;
+}
+
+/** ある日(日本時間)の最低・最高・平均。細かい値があればそこから、なければ1日ごとのまとめから読む */
+export async function roomDayStats(data: SharedData, day: string, until?: Date): Promise<RoomDayStats | null> {
+  const from = jstDayStart(day);
+  const to = until ?? new Date(from.getTime() + DAY_MS);
+  const raw = await data.aggregate(ROOM_SOURCE, { kinds: METRICS, from: from.toISOString(), to: to.toISOString() });
+  const result: RoomDayStats = { temperature: null, humidity: null };
+  for (const a of raw) {
+    if (a.count > 0 && a.min !== null && a.max !== null && a.avg !== null) {
+      result[a.kind as Metric] = { min: a.min, max: a.max, avg: round1(a.avg) };
+    }
+  }
+  if (!result.temperature && !result.humidity) {
+    const daily = await data.query(ROOM_SOURCE, {
+      kinds: METRICS.map(dailyKind),
+      from: from.toISOString(),
+      to: new Date(from.getTime() + 1).toISOString(),
+    });
+    for (const r of daily) {
+      try {
+        const p = JSON.parse(r.payload ?? "{}") as Partial<MetricDayStats>;
+        if (typeof p.min === "number" && typeof p.max === "number" && typeof p.avg === "number") {
+          result[r.kind.replace(/_daily$/, "") as Metric] = { min: p.min, max: p.max, avg: p.avg };
+        }
+      } catch {
+        // 読めなければ、その種類は無しにする
+      }
+    }
+  }
+  return result.temperature || result.humidity ? result : null;
 }
 
 /** 画面に出すまとめ(データの管理の画面の「室温・湿度」) */

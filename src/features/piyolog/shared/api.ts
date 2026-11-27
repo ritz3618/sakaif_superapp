@@ -105,6 +105,8 @@ export interface PiyologSummary {
     temperature: number | null;
     humidity: number | null;
     warnings: { metric: "temperature" | "humidity"; direction: "low" | "high"; threshold: number }[];
+    /** 今日(0時〜今)の最低・最高・平均 */
+    day: RoomDayStats | null;
   } | null;
   /** 時間の帯の表示(今日を含む7日分、新しい順) */
   timeline: TimelineDay[];
@@ -137,4 +139,36 @@ export interface ImportResult {
   deleted: number;
   /** フィードで取得している期間に入るため、取り込まなかった記録の数 */
   ignored: number;
+}
+
+export interface MetricDayStats {
+  min: number;
+  max: number;
+  avg: number;
+}
+
+/** 1日の室温・湿度の最低・最高・平均 */
+export interface RoomDayStats {
+  temperature: MetricDayStats | null;
+  humidity: MetricDayStats | null;
+}
+
+/** 過去の日の表示(GET /day?date=YYYY-MM-DD)。その日の0時〜24時の値 */
+export interface PiyologDaySummary {
+  date: string;
+  day: DayMetrics;
+  /** その日より前の7日の、1日分の平均 */
+  fullDay: Comparison | null;
+  /** その日より前の7日の、授乳1回あたりの平均量 */
+  perFeedingMl: number | null;
+  dailyTargetMl: number | null;
+  room: RoomDayStats | null;
+  /** その日の終わりまでに、最後に記録した体温・体重・身長・お風呂 */
+  latest: PiyologSummary["latest"];
+}
+
+/** 1週間の過ごし方(GET /week?date=YYYY-MM-DD)。その日を含む7日分、新しい順 */
+export interface PiyologWeek {
+  date: string;
+  days: TimelineDay[];
 }

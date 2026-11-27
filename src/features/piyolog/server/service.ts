@@ -3,15 +3,15 @@
  * 記録は共通データ(source = "piyolog")に置き、取得の状態だけを、この機能のテーブル(piyolog_state)に置く。
  */
 import type { DataRecord, DataRecordInput, FeatureJobContext, FeatureSettings, SharedData } from "../../../core/server/feature-api";
-import { DAY_MS, MINUTE_MS, jstDate, jstStartOfDay } from "../../../core/shared/time";
-import type { LatestValue, PiyologDataInfo, PiyologSummary } from "../shared/api";
+import { DAY_MS, MINUTE_MS, jstDate, jstDayStart, jstStartOfDay } from "../../../core/shared/time";
+import type { LatestValue, PiyologDataInfo, PiyologDaySummary, PiyologSummary, PiyologWeek, RoomDayStats } from "../shared/api";
 import { DIAPER_TYPES, FEEDING_TYPES, PIYOLOG_SOURCE, ROOM_SOURCE, SLEEP_TYPE, WAKE_TYPE } from "../shared/records";
 import { awakeAlert, diaperAlert, expiryAlert, feedExpiry, feedingAlert, type LastRecord } from "./alerts";
 import { FeedError, fetchFeed, type Feed, type FeedRecord } from "./feed";
 import { readSyncState, writeSyncState } from "./repo";
 import type { Thresholds } from "../shared/room-api";
 import { evaluate } from "../shared/room-thresholds";
-import { roomThresholds, runRoomJob } from "./room";
+import { roomDayStats, roomThresholds, runRoomJob } from "./room";
 import { computeStats, computeTimeline, previousSpanMinutes } from "./stats";
 
 /** 429 を受けたあと、取得を控える時間 */
@@ -146,7 +146,7 @@ async function runFeedJob(ctx: FeatureJobContext): Promise<void> {
 }
 
 /** 室温・湿度の最新の値と、今の基準との比較 */
-function roomOf(temp: DataRecord | null, hum: DataRecord | null, t: Thresholds): PiyologSummary["room"] {
+function roomOf(temp: DataRecord | null, hum: DataRecord | null, t: Thresholds, day: RoomDayStats | null): PiyologSummary["room"] {
   if (!temp && !hum) return null;
   const warnings: NonNullable<PiyologSummary["room"]>["warnings"] = [];
   for (const [metric, r] of [["temperature", temp], ["humidity", hum]] as const) {
@@ -154,7 +154,7 @@ function roomOf(temp: DataRecord | null, hum: DataRecord | null, t: Thresholds):
     if (w) warnings.push({ metric, direction: w.direction, threshold: w.threshold });
   }
   const at = [temp?.recordedAt, hum?.recordedAt].filter((x): x is string => !!x).sort().at(-1)!;
-  return { at, temperature: temp?.value ?? null, humidity: hum?.value ?? null, warnings };
+  return { at, temperature: temp?.value ?? null, humidity: hum?.value ?? null, warnings, day };
 }
 
 const toLatest = (r: DataRecord | null): LatestValue | null =>
@@ -170,7 +170,7 @@ export async function buildSummary(
   const config = await feedConfig(settings);
   // 過去7日と、7日前の夜からの睡眠のため、8日前の0時から読む
   const since = new Date(jstStartOfDay(now).getTime() - 8 * DAY_MS).toISOString();
-  const [state, rows, earliest, interval, target, activityLimit, lastFeeding, lastPee, lastPoop, temperature, weight, height, bath, roomTemp, roomHum, roomT] =
+  const [state, rows, earliest, interval, target, activityLimit, lastFeeding, lastPee, lastPoop, temperature, weight, height, bath, roomTemp, roomHum, roomT, roomDay] =
     await Promise.all([
       readSyncState(db),
       data.query(PIYOLOG_SOURCE, { from: since }),
@@ -188,6 +188,7 @@ export async function buildSummary(
       data.latest(ROOM_SOURCE, ["temperature"]),
       data.latest(ROOM_SOURCE, ["humidity"]),
       roomThresholds(settings),
+      roomDayStats(data, jstDate(now), now),
     ]);
   const records = rows.map((r) => ({ type: r.kind, at: Date.parse(r.recordedAt), value: r.value, unit: r.unit }));
   const earliestAt = earliest ? Date.parse(earliest) : null;
@@ -235,7 +236,7 @@ export async function buildSummary(
       height: toLatest(height),
       bath: toLatest(bath),
     },
-    room: roomOf(roomTemp, roomHum, roomT),
+    room: roomOf(roomTemp, roomHum, roomT, roomDay),
     timeline: computeTimeline(records, now.getTime(), earliestAt),
     expiry: config.createdOn ? { createdOn: config.createdOn, ...feedExpiry(config.createdOn, now.getTime()) } : null,
   };
@@ -269,5 +270,60 @@ export async function buildDataInfo(
     stored,
     importCutoff: cutoff?.toISOString() ?? null,
     expiry: config.createdOn ? { createdOn: config.createdOn, ...feedExpiry(config.createdOn, now.getTime()) } : null,
+  };
+}
+
+// ---- 過去の日の表示(2026-11-27 ユーザー。今日の表示を速く保つため、今日のまとめとは別に読む) ----
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** YYYY-MM-DD を検査する(今日より先の日は受け付けない) */
+export function parseDay(value: string | undefined, now: Date): string | null {
+  if (!value || !DATE_PATTERN.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) return null;
+  return value <= jstDate(now) ? value : null;
+}
+
+/** その日と、その前の7日の記録(睡眠が前の夜から続く分も含めるため、8日前の0時から) */
+async function rowsAround(data: SharedData, day: string) {
+  const start = jstDayStart(day).getTime();
+  const rows = await data.query(PIYOLOG_SOURCE, {
+    from: new Date(start - 8 * DAY_MS).toISOString(),
+    to: new Date(start + DAY_MS).toISOString(),
+  });
+  return rows.map((r) => ({ type: r.kind, at: Date.parse(r.recordedAt), value: r.value, unit: r.unit }));
+}
+
+/** 1週間の過ごし方(その日を含む7日分)。記録を1回読むだけなので速い */
+export async function buildWeek(data: SharedData, day: string, now: Date): Promise<PiyologWeek> {
+  const [records, earliest] = await Promise.all([rowsAround(data, day), data.earliestAt(PIYOLOG_SOURCE)]);
+  const end = Math.min(jstDayStart(day).getTime() + DAY_MS - 1, now.getTime());
+  return { date: day, days: computeTimeline(records, end, earliest ? Date.parse(earliest) : null) };
+}
+
+/** 過去の日のまとめ(その日の0時〜24時と、その前の7日の平均) */
+export async function buildDaySummary(data: SharedData, settings: FeatureSettings, day: string): Promise<PiyologDaySummary> {
+  const dayEnd = new Date(jstDayStart(day).getTime() + DAY_MS);
+  const before = (kinds: string[]) =>
+    data.query(PIYOLOG_SOURCE, { kinds, to: dayEnd.toISOString(), order: "desc", limit: 1 }).then((r) => r[0] ?? null);
+  const [records, earliest, target, room, temperature, weight, height, bath] = await Promise.all([
+    rowsAround(data, day),
+    data.earliestAt(PIYOLOG_SOURCE),
+    settings.get("dailyFeedingTargetMl"),
+    roomDayStats(data, day),
+    before(["Temperature"]),
+    before(["Weight"]),
+    before(["Height"]),
+    before(["Bath"]),
+  ]);
+  // その日の終わりを「今」とみなすと、「今日」= その日1日分、「同じ時刻まで」= 前の7日の1日分 になる
+  const stats = computeStats(records, dayEnd.getTime() - 1, earliest ? Date.parse(earliest) : null);
+  return {
+    date: day,
+    day: stats.today,
+    fullDay: stats.fullDay,
+    perFeedingMl: stats.perFeedingMl,
+    dailyTargetMl: typeof target === "number" ? target : null,
+    room,
+    latest: { temperature: toLatest(temperature), weight: toLatest(weight), height: toLatest(height), bath: toLatest(bath) },
   };
 }

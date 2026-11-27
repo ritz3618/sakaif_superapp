@@ -168,6 +168,12 @@ function memoryData(initial: DataRecord[] = []): SharedData & { rows: DataRecord
     async upsert() {
       return { written: 0 };
     },
+    async aggregate() {
+      return [];
+    },
+    async purge() {
+      return { deleted: 0 };
+    },
   };
   return data;
 }

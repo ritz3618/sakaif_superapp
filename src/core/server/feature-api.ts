@@ -12,7 +12,7 @@ import type { FeatureSettings } from "./settings";
 export type { AppBindings, Env, User } from "./env";
 export type { NotifyRequest, NotifyUserResult, NotifyOutcome } from "./notify";
 export type { FeatureSettings } from "./settings";
-export type { DataQuery, DataRecord, DataRecordInput, SharedData, SnapshotResult } from "./data";
+export type { DataAggregate, DataQuery, DataRecord, DataRecordInput, SharedData, SnapshotResult } from "./data";
 export * from "./time";
 /** base64 の変換(署名などに使う) */
 export { bytesToBase64 } from "./encoding";
