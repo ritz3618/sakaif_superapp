@@ -73,6 +73,16 @@ export function featurePath(id: string): string {
   return `/${id}/`;
 }
 
+/**
+ * 機能の設定画面のパス(例: "/<機能ID>/settings/")。
+ * 機能の画面の中の "/settings/" は、共通部分が使う(機能は、このパスを自分の画面に使わない)。
+ */
+export const FEATURE_SETTINGS_SUBPATH = "/settings/";
+
+export function featureSettingsPath(id: string): string {
+  return `/${id}${FEATURE_SETTINGS_SUBPATH}`;
+}
+
 /** 宣言の誤りを、メッセージの配列で返す(空なら問題なし)。 */
 export function validateFeatures(features: readonly FeatureMeta[]): string[] {
   const errors: string[] = [];

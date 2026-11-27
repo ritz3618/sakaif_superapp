@@ -4,20 +4,18 @@
  *   (この3つは1画面に収める)、室温・湿度、最近の体温・体重・身長・お風呂、今日・昨日・2日前の時間の帯。
  * - データの管理(/<機能ID>/data/): 過去の記録の取り込み、CSV の書き出し。
  * 経過時間は30秒ごと、データは1分ごとに更新する。
- * 見た目は共通の部品(Panel、CompareTable など)で作り、この機能だけの調整は web/piyolog.css に書く。
+ * 見た目は共通の部品(Panel、PaceBar など)で作り、この機能だけの調整は web/piyolog.css に書く。
  */
 import { useCallback, useEffect, useState } from "react";
 import {
-  BulletBar,
   Button,
-  CompareTable,
   Link,
   Note,
+  PaceBar,
   Panel,
   Stat,
   StatGrid,
-  type BulletMark,
-  type CompareRow,
+  Trend,
   type FeatureScreenProps,
 } from "../../core/web/feature-api";
 import type { DayMetrics, LatestValue, PiyologSummary } from "./shared/api";
@@ -42,32 +40,6 @@ function formatBy(unit: CompareUnit, value: number): string {
 }
 
 /**
- * 比べる表の1行。average は「ふだん」の値(無ければ null)。
- * shortage を付けると、少ないときに「少なめ」の注意を出す(回数には付けない)。muted は参考程度の行。
- */
-function row(
-  label: string,
-  value: number | null,
-  average: number | null,
-  unit: CompareUnit,
-  options: { shortage?: boolean; muted?: boolean } = {},
-): CompareRow {
-  if (value === null) return { label, value: "—", muted: options.muted };
-  const result: CompareRow = {
-    label,
-    value: formatBy(unit, value),
-    reference: average === null ? undefined : formatBy(unit, average),
-    muted: options.muted,
-  };
-  if (average !== null && !options.muted) {
-    const c = compare(value, average, unit);
-    result.trend = { direction: c.direction, text: c.diffText };
-    if (options.shortage && unit !== "count" && isShort(value, average, unit)) result.warning = "少なめ";
-  }
-  return result;
-}
-
-/**
  * 1日の目安量のうち、今の時刻までに飲む分の目安。
  * ふだんの飲み方の配分(ふだんの「今の時刻まで」÷「1日」)で割り振る。ふだんの記録が無ければ、時刻で均等に割り振る。
  */
@@ -76,39 +48,20 @@ function targetUpToNow(target: number, typicalNow: number | null, typicalDay: nu
   return (target * jstMinuteOfDay(new Date(now))) / 1440;
 }
 
-/** 授乳の量を、ふだん(点線)と目安(太い線)と並べて見せる棒 */
-function FeedingBar({
-  label,
-  value,
-  typical,
-  target,
-}: {
-  label: string;
-  value: number;
-  typical: number | null;
-  target: number | null;
-}) {
-  const marks: BulletMark[] = [];
-  if (typical !== null) {
-    const c = compare(value, typical, "ml");
-    marks.push({ value: typical, kind: "typical", label: `ふだん ${formatMl(typical)}`, direction: c.direction });
-  }
-  if (target !== null) {
-    const c = compare(value, target, "ml");
-    marks.push({ value: target, kind: "target", label: `目安 ${formatMl(target)}`, direction: c.direction });
-  }
-  // 判定は目安があれば目安、なければふだんと比べる(数値そのものを比べる)
-  const reference = target ?? typical;
-  const short = reference !== null && isShort(value, reference, "ml");
-  const rest = reference !== null ? Math.round(reference - value) : 0;
+/** 差の表示(例: 「+26ml ↑」)。数値そのものを比べる */
+function Diff({ value, reference, unit }: { value: number; reference: number; unit: CompareUnit }) {
+  const c = compare(value, reference, unit);
+  return <Trend direction={c.direction}>{c.diffText}</Trend>;
+}
+
+/** 1日の基準まで、あといくつか(届いていれば「到達」) */
+function Rest({ value, goal, unit, label }: { value: number; goal: number; unit: CompareUnit; label: string }) {
+  const c = compare(value, goal, unit);
+  if (c.direction !== "less") return <>{label}に到達</>;
   return (
-    <BulletBar
-      label={label}
-      value={value}
-      valueText={formatMl(value)}
-      marks={marks}
-      warning={short ? `${target !== null ? "目安" : "ふだん"}まであと${rest}ml` : undefined}
-    />
+    <>
+      {label}まで あと<strong>{formatBy(unit, goal - value)}</strong>
+    </>
   );
 }
 
@@ -225,17 +178,15 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
   const activityLeft = awake ? sleep.activityLimitMinutes - sleepMinutes : null;
   const overLimit = activityLeft !== null && activityLeft <= 0;
 
-  const sleepRows: CompareRow[] = [
-    row("今の時刻まで", today.sleepMinutes, upToNow((m) => m.sleepMinutes), "minutes", { shortage: true }),
-    row("1日", today.sleepMinutes, perDay((m) => m.sleepMinutes), "minutes", { shortage: true }),
-  ];
-  const diaperRows: CompareRow[] = [
-    row("うんち 今の時刻まで", today.poopCount, upToNow((m) => m.poopCount), "count"),
-    row("うんち 1日", today.poopCount, perDay((m) => m.poopCount), "count"),
-    row("おしっこ(参考)", today.peeCount, upToNow((m) => m.peeCount), "count", { muted: true }),
-  ];
-  const headers: [string, string, string] = ["", "今日", "ふだん"];
   const countAvg = upToNow((m) => m.feedingCount);
+  // 今日の値は1回だけ書き、「今の時刻までのふだん」(点線)と「1日の基準」(棒の右端)を重ねる(2026-11-27)
+  const typicalNowMl = upToNow((m) => m.feedingMl);
+  const feedingGoal = target ?? perDay((m) => m.feedingMl);
+  const feedingPace = targetNow ?? typicalNowMl;
+  const sleepGoal = perDay((m) => m.sleepMinutes);
+  const sleepPace = upToNow((m) => m.sleepMinutes);
+  const poopGoal = perDay((m) => m.poopCount);
+  const poopPace = upToNow((m) => m.poopCount);
 
   return (
     <div className="piyolog-screen">
@@ -261,8 +212,31 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
             : ""}
           {feedingOverdue && <strong className="piyolog-alert"> ⚠ 基準の{formatMinutes(summary.feeding.intervalMinutes)}を過ぎています</strong>}
         </p>
-        <FeedingBar label="今の時刻まで" value={today.feedingMl} typical={upToNow((m) => m.feedingMl)} target={targetNow} />
-        <FeedingBar label="1日" value={today.feedingMl} typical={perDay((m) => m.feedingMl)} target={target} />
+        <PaceBar
+          label="今日の量"
+          value={today.feedingMl}
+          valueText={formatMl(today.feedingMl)}
+          goal={feedingGoal !== null ? { value: feedingGoal, label: `${target !== null ? "1日の目安" : "ふだんの1日"} ${formatMl(feedingGoal)}` } : null}
+          pace={feedingPace}
+          behind={feedingPace !== null && isShort(today.feedingMl, feedingPace, "ml")}
+        >
+          {typicalNowMl !== null && (
+            <>
+              今の時刻のふだん {formatMl(typicalNowMl)} <Diff value={today.feedingMl} reference={typicalNowMl} unit="ml" />
+            </>
+          )}
+          {targetNow !== null && (
+            <>
+              {" ・ "}目安 {formatMl(targetNow)} <Diff value={today.feedingMl} reference={targetNow} unit="ml" />
+            </>
+          )}
+          {feedingGoal !== null && (
+            <>
+              <br />
+              <Rest value={today.feedingMl} goal={feedingGoal} unit="ml" label={target !== null ? "1日の目安" : "ふだんの1日"} />
+            </>
+          )}
+        </PaceBar>
         <p className="piyolog-line piyolog-line--muted">
           回数 {today.feedingCount}回{countAvg !== null && `(ふだん ${formatCount(countAvg)})`}
           {" ・ "}1回平均 {perFeedingToday !== null ? formatMl(perFeedingToday) : "—"}
@@ -281,30 +255,69 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
         }
       >
         <p className="piyolog-line">
-          {sleep.previousMinutes !== null &&
-            `${sleep.state === "sleeping" ? "直前の活動" : "直前の睡眠"} ${formatMinutes(sleep.previousMinutes)}`}
+          {sleep.previousMinutes !== null && (
+            <>
+              {sleep.state === "sleeping" ? "直前の活動" : "直前の睡眠"} <strong>{formatMinutes(sleep.previousMinutes)}</strong>
+            </>
+          )}
           {activityLeft !== null &&
             (overLimit ? (
               <strong className="piyolog-alert"> ⚠ 活動限界を{formatMinutes(-activityLeft)}過ぎています</strong>
             ) : (
-              ` ・ 活動限界まであと${formatMinutes(activityLeft)}`
+              <>
+                {" ・ "}活動限界まであと<strong>{formatMinutes(activityLeft)}</strong>
+              </>
             ))}
         </p>
-        <CompareTable dense headers={["睡眠の合計", "今日", "ふだん"]} rows={sleepRows} />
+        <PaceBar
+          label="今日の睡眠"
+          value={today.sleepMinutes}
+          valueText={formatMinutes(today.sleepMinutes)}
+          goal={sleepGoal !== null ? { value: sleepGoal, label: `ふだんの1日 ${formatMinutes(Math.round(sleepGoal))}` } : null}
+          pace={sleepPace}
+          behind={sleepPace !== null && isShort(today.sleepMinutes, sleepPace, "minutes")}
+        >
+          {sleepPace !== null && (
+            <>
+              今の時刻のふだん {formatMinutes(Math.round(sleepPace))} <Diff value={today.sleepMinutes} reference={sleepPace} unit="minutes" />
+            </>
+          )}
+          {sleepGoal !== null && (
+            <>
+              {" ・ "}
+              <Rest value={today.sleepMinutes} goal={sleepGoal} unit="minutes" label="ふだんの1日" />
+            </>
+          )}
+        </PaceBar>
       </Panel>
 
       <Panel title="おむつ" className="piyolog-compact" aside={lastDiaperAt ? `${elapsedSince(lastDiaperAt, now)}前` : "記録なし"}>
         <p className="piyolog-line">
           うんち {timeOf(summary.poop.lastAt)} ・ おしっこ {timeOf(summary.pee.lastAt)}
         </p>
-        <CompareTable dense headers={headers} rows={diaperRows} />
+        <PaceBar
+          label="今日のうんち"
+          value={today.poopCount}
+          valueText={formatCount(today.poopCount)}
+          goal={poopGoal !== null ? { value: poopGoal, label: `ふだんの1日 ${formatCount(poopGoal)}` } : null}
+          pace={poopPace}
+        >
+          {poopPace !== null && (
+            <>
+              今の時刻のふだん {formatCount(poopPace)} <Diff value={today.poopCount} reference={poopPace} unit="count" />
+            </>
+          )}
+          <br />
+          おしっこ(参考) {formatCount(today.peeCount)}
+          {upToNow((m) => m.peeCount) !== null && `(今の時刻のふだん ${formatCount(upToNow((m) => m.peeCount)!)})`}
+        </PaceBar>
       </Panel>
 
       <p className="note piyolog-footnote">
         {sameTime || fullDay
-          ? `ふだん = 過去${fullDay?.days ?? 0}日の平均(今の時刻まで / 1日分)。授乳の棒の点線はふだん、太い線は目安。`
+          ? `棒は今日の値。右端の太い線は1日の基準、点線は今の時刻までの基準(ふだん = 過去${fullDay?.days ?? 0}日の平均)。少ないと赤になります。`
           : "比べられる過去の記録が、まだありません。"}
-        {target !== null && ` 今の時刻までの目安は、1日の目安(${formatMl(target)})をふだんの飲み方の配分で割り振った値。`}
+        {target !== null && ` 授乳は設定の目安(1日 ${formatMl(target)})が基準で、今の時刻までの目安は、ふだんの飲み方の配分で割り振った値です。`}
       </p>
 
       {summary.room && <RoomPanel room={summary.room} now={now} />}
