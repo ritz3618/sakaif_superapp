@@ -74,6 +74,10 @@ export interface PiyologSummary {
     since: string | null;
     lastSleepAt: string | null;
     lastWakeAt: string | null;
+    /** 起きているなら直前の睡眠の長さ、寝ているなら直前の活動(起きていた時間)の長さ(分)。分からなければ null */
+    previousMinutes: number | null;
+    /** 活動限界(分)。起きている時間がこれを過ぎたら、画面で目立たせ、通知する */
+    activityLimitMinutes: number;
   };
   /** 今日(日本時間の0時から今まで)の値 */
   today: DayMetrics;
@@ -102,7 +106,7 @@ export interface PiyologSummary {
     humidity: number | null;
     warnings: { metric: "temperature" | "humidity"; direction: "low" | "high"; threshold: number }[];
   } | null;
-  /** 時間の帯の表示(今日、昨日の順) */
+  /** 時間の帯の表示(今日、昨日、2日前の順) */
   timeline: TimelineDay[];
   /** フィードURLの期限の目安(作成日から89日) */
   expiry: { createdOn: string; expiresOn: string; daysLeft: number } | null;

@@ -10,6 +10,7 @@ export { ApiError } from "./api";
 /** 共通の見た目の部品(これを使うと、アプリ全体の見た目のテイストがそろう) */
 export {
   BigValue,
+  BulletBar,
   Button,
   CompareTable,
   FileButton,
@@ -19,6 +20,7 @@ export {
   StatGrid,
   Timeline,
   Trend,
+  type BulletMark,
   type CompareRow,
   type TimelineRow,
   type TimelineSegment,

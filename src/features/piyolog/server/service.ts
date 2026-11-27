@@ -6,13 +6,13 @@ import type { DataRecord, DataRecordInput, FeatureJobContext, FeatureSettings, S
 import { DAY_MS, MINUTE_MS, jstDate, jstStartOfDay } from "../../../core/shared/time";
 import type { LatestValue, PiyologDataInfo, PiyologSummary } from "../shared/api";
 import { DIAPER_TYPES, FEEDING_TYPES, PIYOLOG_SOURCE, ROOM_SOURCE, SLEEP_TYPE, WAKE_TYPE } from "../shared/records";
-import { diaperAlert, expiryAlert, feedExpiry, feedingAlert, type LastRecord } from "./alerts";
+import { awakeAlert, diaperAlert, expiryAlert, feedExpiry, feedingAlert, type LastRecord } from "./alerts";
 import { FeedError, fetchFeed, type Feed, type FeedRecord } from "./feed";
 import { readSyncState, writeSyncState } from "./repo";
 import type { Thresholds } from "../shared/room-api";
 import { evaluate } from "../shared/room-thresholds";
 import { roomThresholds, runRoomJob } from "./room";
-import { computeStats, computeTimeline } from "./stats";
+import { computeStats, computeTimeline, previousSpanMinutes } from "./stats";
 
 /** 429 を受けたあと、取得を控える時間 */
 const PAUSE_AFTER_RATE_LIMIT_MS = 15 * MINUTE_MS;
@@ -117,15 +117,18 @@ async function runFeedJob(ctx: FeatureJobContext): Promise<void> {
   // 取得を控えている間など、データが古いときは通知の判定をしない(誤通知を避ける)
   const state = await readSyncState(ctx.db);
   const fresh = !!state.lastSuccessAt && now.getTime() - Date.parse(state.lastSuccessAt) <= MAX_DATA_AGE_FOR_ALERTS_MS;
-  const [feedingInterval, diaperInterval, lastFeeding, lastDiaper] = await Promise.all([
+  const [feedingInterval, diaperInterval, activityLimit, lastFeeding, lastDiaper, lastSleepEvent] = await Promise.all([
     ctx.settings.get("feedingIntervalMinutes"),
     ctx.settings.get("diaperIntervalMinutes"),
+    ctx.settings.get("activityLimitMinutes"),
     fresh ? ctx.data.latest(PIYOLOG_SOURCE, FEEDING_TYPES) : Promise.resolve(null),
     fresh ? ctx.data.latest(PIYOLOG_SOURCE, DIAPER_TYPES) : Promise.resolve(null),
+    fresh ? ctx.data.latest(PIYOLOG_SOURCE, [SLEEP_TYPE, WAKE_TYPE]) : Promise.resolve(null),
   ]);
   const alerts = [
     fresh ? feedingAlert(toLast(lastFeeding), feedingInterval as number, now.getTime()) : null,
     fresh ? diaperAlert(toLast(lastDiaper), diaperInterval as number, now.getTime()) : null,
+    fresh ? awakeAlert(toLast(lastSleepEvent), activityLimit as number, now.getTime()) : null,
     expiryAlert(config.createdOn, now.getTime()),
   ];
   for (const alert of alerts) {
@@ -167,13 +170,14 @@ export async function buildSummary(
   const config = await feedConfig(settings);
   // 過去7日と、7日前の夜からの睡眠のため、8日前の0時から読む
   const since = new Date(jstStartOfDay(now).getTime() - 8 * DAY_MS).toISOString();
-  const [state, rows, earliest, interval, target, lastFeeding, lastPee, lastPoop, temperature, weight, height, bath, roomTemp, roomHum, roomT] =
+  const [state, rows, earliest, interval, target, activityLimit, lastFeeding, lastPee, lastPoop, temperature, weight, height, bath, roomTemp, roomHum, roomT] =
     await Promise.all([
       readSyncState(db),
       data.query(PIYOLOG_SOURCE, { from: since }),
       data.earliestAt(PIYOLOG_SOURCE),
       settings.get("feedingIntervalMinutes"),
       settings.get("dailyFeedingTargetMl"),
+      settings.get("activityLimitMinutes"),
       data.latest(PIYOLOG_SOURCE, FEEDING_TYPES),
       data.latest(PIYOLOG_SOURCE, ["Pee"]),
       data.latest(PIYOLOG_SOURCE, ["Poop"]),
@@ -220,6 +224,8 @@ export async function buildSummary(
       since: lastSleepEvent?.recordedAt ?? null,
       lastSleepAt: lastSleep?.recordedAt ?? null,
       lastWakeAt: lastWake?.recordedAt ?? null,
+      previousMinutes: previousSpanMinutes(records, now.getTime()),
+      activityLimitMinutes: activityLimit as number,
     },
     today: stats.today,
     comparison: { sameTime: stats.sameTime, fullDay: stats.fullDay, perFeedingMl: stats.perFeedingMl },

@@ -901,3 +901,145 @@ button.button--small {
 .setting__number {
   width: 7em;
 }
+
+/* 見出しの右に大きな値を置く枠(Panel の aside) */
+.ui-panel__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+}
+
+.ui-panel__head .ui-panel__title {
+  margin: 0;
+}
+
+.ui-panel__aside {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  text-align: right;
+}
+
+.ui-panel__aside--warn {
+  color: var(--alert);
+}
+
+/* 行を詰めた比べる表 */
+.ui-compare--dense th,
+.ui-compare--dense td {
+  padding: 3px var(--space-1);
+}
+
+.ui-compare--dense .ui-compare__value {
+  font-size: var(--font-sm);
+}
+
+.ui-compare--dense th {
+  white-space: nowrap;
+}
+
+.ui-compare--dense .ui-compare__trend {
+  white-space: normal;
+}
+
+/* ブレット・グラフ(BulletBar) */
+.ui-bullet {
+  margin-top: var(--space-2);
+}
+
+.ui-bullet__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-xs);
+}
+
+.ui-bullet__label {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ui-bullet__value {
+  font-size: var(--font-md);
+  font-weight: 700;
+}
+
+.ui-bullet--warn .ui-bullet__value {
+  color: var(--alert);
+}
+
+.ui-bullet__marks {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 var(--space-2);
+  color: var(--muted);
+}
+
+.ui-bullet__mark-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.ui-bullet__key {
+  display: inline-block;
+  width: 0;
+  height: 10px;
+}
+
+.ui-bullet__key--typical {
+  border-left: 2px dotted var(--muted);
+}
+
+.ui-bullet__key--target {
+  border-left: 3px solid var(--text);
+}
+
+.ui-bullet__track {
+  position: relative;
+  height: 14px;
+  margin-top: 3px;
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.ui-bullet__bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  border-radius: 3px;
+  background: var(--feature-color);
+}
+
+.ui-bullet--warn .ui-bullet__bar {
+  background: var(--alert);
+}
+
+.ui-bullet__mark {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+}
+
+.ui-bullet__mark--typical {
+  border-left: 2px dotted var(--muted);
+}
+
+.ui-bullet__mark--target {
+  width: 3px;
+  margin-left: -1px;
+  background: var(--text);
+}
+
+.ui-bullet__warning {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--alert);
+}

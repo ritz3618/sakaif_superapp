@@ -13,6 +13,7 @@ export default defineFeature({
   notifications: [
     { type: "feeding_due", label: "授乳の経過時間" },
     { type: "diaper_due", label: "おむつ替えの経過時間" },
+    { type: "awake_too_long", label: "活動限界(起きている時間)" },
     { type: "feed_expiring", label: "フィードURLの期限" },
     { type: "room_temperature_out", label: "室温が基準の外" },
     { type: "room_humidity_out", label: "湿度が基準の外" },
@@ -43,6 +44,17 @@ export default defineFeature({
       scope: "shared",
       type: "minutes",
       default: 240,
+      min: 30,
+      max: 720,
+    },
+    {
+      key: "activityLimitMinutes",
+      label: "活動限界",
+      description:
+        "起きてから続けて活動できる時間の目安です(夫婦共通)。画面に「活動限界まであと○分」と出し、過ぎたら通知します。",
+      scope: "shared",
+      type: "minutes",
+      default: 180,
       min: 30,
       max: 720,
     },
