@@ -106,7 +106,7 @@ export interface PiyologSummary {
     humidity: number | null;
     warnings: { metric: "temperature" | "humidity"; direction: "low" | "high"; threshold: number }[];
   } | null;
-  /** 時間の帯の表示(今日、昨日、2日前の順) */
+  /** 時間の帯の表示(今日を含む7日分、新しい順) */
   timeline: TimelineDay[];
   /** フィードURLの期限の目安(作成日から89日) */
   expiry: { createdOn: string; expiresOn: string; daysLeft: number } | null;

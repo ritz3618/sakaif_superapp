@@ -119,3 +119,12 @@
 .piyolog-alert {
   color: var(--alert);
 }
+
+/* 1週間の時間の帯は7行あるので、帯を少し細くする */
+[data-feature="piyolog"] .ui-timeline__bar {
+  height: 26px;
+}
+
+[data-feature="piyolog"] .ui-timeline__row {
+  margin-bottom: 6px;
+}

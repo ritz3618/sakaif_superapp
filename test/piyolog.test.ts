@@ -190,7 +190,9 @@ describe("時間の帯", () => {
       rec("WakeUp", "11-26 09:00"),
     ];
     const days = computeTimeline(records, now, jst("11-25 20:00"));
-    expect(days.map((d) => d.date)).toEqual(["2026-11-26", "2026-11-25", "2026-11-24"]);
+    expect(days.map((d) => d.date)).toEqual([
+      "2026-11-26", "2026-11-25", "2026-11-24", "2026-11-23", "2026-11-22", "2026-11-21", "2026-11-20",
+    ]);
     const [today, yesterday] = days;
     expect(today).toEqual({
       date: "2026-11-26",
