@@ -23,6 +23,7 @@ import { jstDate, jstMinuteOfDay } from "../../core/shared/time";
 import { formatMinutes, formatMl, minutesBetween } from "./shared/format";
 import { compare, isShort, type CompareUnit } from "./web/compare";
 import DataPage from "./web/DataPage";
+import GraphsPage from "./web/Graphs";
 import { DateNav } from "./web/DateNav";
 import { PastDayScreen } from "./web/PastDay";
 import { DayTimeline } from "./web/DayTimeline";
@@ -169,9 +170,14 @@ function MainScreen({ apiFetch, feature, nav }: FeatureScreenProps & { nav: Reac
           最終取得 {sync.lastSuccessAt ? timeOf(sync.lastSuccessAt) : "まだありません"}
           {sync.lastAttemptOk === false && <span className="piyolog-sync__error"> 取得に失敗: {sync.lastError}</span>}
         </span>
-        <Button variant="secondary" size="small" disabled={refreshing} onClick={refresh}>
-          {refreshing ? "取得中…" : "今すぐ更新"}
-        </Button>
+        <span className="piyolog-sync__buttons">
+          <Link href={`/${feature.id}/graphs/`} className="piyolog-graph-button">
+            グラフ
+          </Link>
+          <Button variant="secondary" size="small" disabled={refreshing} onClick={refresh}>
+            {refreshing ? "取得中…" : "今すぐ更新"}
+          </Button>
+        </span>
       </div>
 
       <Panel
@@ -320,7 +326,11 @@ function MainScreen({ apiFetch, feature, nav }: FeatureScreenProps & { nav: Reac
 /** メインの画面。表示する日が今日なら今日の画面、それ以外は過去の日の画面(2026-11-27 ユーザー) */
 function DayScreens(props: FeatureScreenProps) {
   const today = jstDate(new Date());
-  const [date, setDate] = useState(today);
+  // グラフから「この日の育児ログを見る」で来たときは、?date=YYYY-MM-DD の日を開く
+  const [date, setDate] = useState(() => {
+    const asked = new URLSearchParams(window.location.search).get("date");
+    return asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) && asked < today ? asked : today;
+  });
   const nav = <DateNav date={date} today={today} onChange={(d) => setDate(d > today ? today : d)} />;
   if (date >= today) return <MainScreen {...props} nav={nav} />;
   return <PastDayScreen apiFetch={props.apiFetch} date={date} nav={nav} />;
@@ -328,5 +338,6 @@ function DayScreens(props: FeatureScreenProps) {
 
 export default function IkujiLogScreen(props: FeatureScreenProps) {
   if (props.subPath.startsWith("/data")) return <DataPage {...props} />;
+  if (props.subPath.startsWith("/graphs")) return <GraphsPage {...props} />;
   return <DayScreens {...props} />;
 }

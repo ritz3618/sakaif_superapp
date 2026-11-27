@@ -11,6 +11,7 @@ import { FeedError, fetchFeed, type Feed, type FeedRecord } from "./feed";
 import { readSyncState, writeSyncState } from "./repo";
 import type { Thresholds } from "../shared/room-api";
 import { evaluate } from "../shared/room-thresholds";
+import { warmDailyCache } from "./daily";
 import { roomDayStats, roomThresholds, runRoomJob } from "./room";
 import { computeStats, computeTimeline, previousSpanMinutes } from "./stats";
 
@@ -97,7 +98,7 @@ function toLast(record: DataRecord | null): LastRecord | null {
 /** 5分おきの定期実行。フィードと室温・湿度は、片方が失敗しても、もう片方は行う(失敗はまとめて報告する)。 */
 export async function runScheduledJob(ctx: FeatureJobContext): Promise<void> {
   const errors: string[] = [];
-  for (const job of [runFeedJob, runRoomJob]) {
+  for (const job of [runFeedJob, runRoomJob, warmChartJob]) {
     try {
       await job(ctx);
     } catch (error) {
@@ -105,6 +106,11 @@ export async function runScheduledJob(ctx: FeatureJobContext): Promise<void> {
     }
   }
   if (errors.length > 0) throw new Error(errors.join(" / "));
+}
+
+/** グラフ用の1日ごとの集計を、少しずつ作っておく(グラフの画面を速く出すため) */
+async function warmChartJob(ctx: FeatureJobContext): Promise<void> {
+  await warmDailyCache(ctx.db, ctx.data, new Date());
 }
 
 /** フィードの取得と通知。フィードURLが未設定なら、何もしない(失敗ではない)。 */

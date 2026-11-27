@@ -36,3 +36,5 @@ export interface FeatureScreenProps {
 }
 
 export type FeatureScreen = ComponentType<FeatureScreenProps>;
+/** 共通のグラフ部品(棒グラフ・折れ線グラフ) */
+export { BarChart, LineChart, type BarChartProps, type LineChartProps, type LinePoint } from "./charts";

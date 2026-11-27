@@ -3,13 +3,15 @@
  * - 5分おきにフィードを取得して保存し、授乳・おむつ替え・フィードの期限の通知を判定する。
  * - 室温・湿度(SwitchBot)も5分おきに読んで共通データに保存し、基準の外が続いたら通知する(通知は初期値オフ)。
  * - 画面用の API: GET /summary、POST /refresh(今すぐ取得)、GET /data-info、POST /import(月ごとのテキストの取り込み)、
- *   GET /day・GET /week(過去の日の表示)、GET /export.csv、GET /room(室温・湿度の状態)、GET /room/devices(SwitchBot の機器の確認)
+ *   GET /day・GET /week(過去の日の表示)、GET /charts(グラフ)、GET /export.csv、GET /room(室温・湿度の状態)、GET /room/devices(SwitchBot の機器の確認)
  */
 import { defineFeatureServer, featureContext, formatMinutesFromIso } from "./server/helpers";
 import { readRoomState, readSyncState } from "./server/repo";
 import { buildRoomSummary, checkDevices, fetchReading } from "./server/room";
 import { SwitchBotError } from "./server/switchbot";
 import { recordsToCsv } from "./server/csv";
+import { buildChartData } from "./server/charts";
+import { invalidateDaily } from "./server/daily";
 import { importMonthlyText } from "./server/import";
 import {
   buildDataInfo,
@@ -67,6 +69,17 @@ export default defineFeatureServer({
       return c.json(await buildWeek(ctx.data, day, now));
     });
 
+    // グラフ。集計が終わっていない日があれば pending を返す(画面がもう一度読む)
+    app.get("/charts", async (c) => {
+      const ctx = featureContext(c);
+      const now = new Date();
+      const unit = c.req.query("unit");
+      if (unit !== "day" && unit !== "week" && unit !== "month") return c.json({ error: "期間の単位が正しくありません" }, 400);
+      const end = parseDay(c.req.query("end"), now);
+      if (!end) return c.json({ error: "日付が正しくありません" }, 400);
+      return c.json(await buildChartData(ctx.db, ctx.data, ctx.settings, unit, end, now));
+    });
+
     app.get("/data-info", async (c) => {
       const ctx = featureContext(c);
       return c.json(await buildDataInfo(ctx.db, ctx.data, ctx.settings, new Date()));
@@ -80,7 +93,10 @@ export default defineFeatureServer({
       if (typeof text !== "string" || !text) return c.json({ error: "テキストがありません" }, 400);
       if (text.length > MAX_IMPORT_BYTES) return c.json({ error: "テキストが大きすぎます" }, 413);
       try {
-        return c.json(await importMonthlyText(ctx.data, text, await importCutoff(ctx.db, new Date())));
+        const result = await importMonthlyText(ctx.data, text, await importCutoff(ctx.db, new Date()));
+        // 取り込んだ期間のグラフ用の集計は作り直す
+        await invalidateDaily(ctx.db, result.firstDay, result.lastDay);
+        return c.json(result);
       } catch (error) {
         if (error instanceof TextImportError) return c.json({ error: error.message }, 400);
         throw error;
