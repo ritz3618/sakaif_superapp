@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { diaperAlert, expiryAlert, feedExpiry, feedingAlert } from "../src/features/piyolog/server/alerts";
+import { awakeAlert, diaperAlert, expiryAlert, feedExpiry, feedingAlert } from "../src/features/piyolog/server/alerts";
 import { recordsToCsv } from "../src/features/piyolog/server/csv";
 import { FeedError, fetchFeed, parseFeed, type Feed } from "../src/features/piyolog/server/feed";
-import { computeStats, computeTimeline, sleepIntervals, type StatRecord } from "../src/features/piyolog/server/stats";
+import { computeStats, computeTimeline, previousSpanMinutes, sleepIntervals, type StatRecord } from "../src/features/piyolog/server/stats";
 import { feedToSnapshot } from "../src/features/piyolog/server/service";
 import type { DataRecord } from "../src/core/server/data";
 import { formatMinutes } from "../src/features/piyolog/shared/format";
@@ -157,6 +157,27 @@ describe("集計", () => {
   });
 });
 
+describe("睡眠の状況と活動限界", () => {
+  it("起きているなら直前の睡眠、寝ているなら直前の活動の長さ", () => {
+    const records = [rec("Sleep", "11-26 06:00"), rec("WakeUp", "11-26 07:30"), rec("Sleep", "11-26 09:40")];
+    expect(previousSpanMinutes(records.slice(0, 2), jst("11-26 08:00"))).toBe(90);
+    expect(previousSpanMinutes(records, jst("11-26 10:00"))).toBe(130);
+    expect(previousSpanMinutes([rec("Sleep", "11-26 06:00")], jst("11-26 08:00"))).toBeNull();
+  });
+
+  it("活動限界は、最後の記録が「起きる」で、限界を過ぎたら1回だけ通知する", () => {
+    const wake = { eventId: "w1", type: "WakeUp", at: jst("11-26 07:30"), value: null, unit: null };
+    expect(awakeAlert(wake, 180, jst("11-26 10:29"))).toBeNull();
+    expect(awakeAlert(wake, 180, jst("11-26 10:30"))).toEqual({
+      type: "awake_too_long",
+      dedupeKey: "awake:w1",
+      title: "活動限界(3時間)を過ぎました",
+      body: "起きてから3時間たちました(07:30に起きました)",
+    });
+    expect(awakeAlert({ ...wake, type: "Sleep" }, 180, jst("11-26 12:00"))).toBeNull();
+  });
+});
+
 describe("時間の帯", () => {
   it("睡眠・起きている時間・授乳・うんちを、0時からの分で返す(今日は今まで、昨日は24時まで)", () => {
     const now = jst("11-26 10:00");
@@ -168,7 +189,9 @@ describe("時間の帯", () => {
       rec("Sleep", "11-26 08:00"),
       rec("WakeUp", "11-26 09:00"),
     ];
-    const [today, yesterday] = computeTimeline(records, now, jst("11-25 20:00"));
+    const days = computeTimeline(records, now, jst("11-25 20:00"));
+    expect(days.map((d) => d.date)).toEqual(["2026-11-26", "2026-11-25", "2026-11-24"]);
+    const [today, yesterday] = days;
     expect(today).toEqual({
       date: "2026-11-26",
       until: 600,

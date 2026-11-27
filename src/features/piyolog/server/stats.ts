@@ -179,12 +179,30 @@ export function timelineDay(
   };
 }
 
-/** 今日と昨日の時間の帯 */
+/** 今日・昨日・2日前の時間の帯 */
 export function computeTimeline(records: readonly StatRecord[], now: number, earliestAt: number | null): TimelineDay[] {
   const intervals = sleepIntervals(records, now);
   const todayStart = jstStartOfDay(new Date(now)).getTime();
-  return [
-    timelineDay(records, intervals, todayStart, now, earliestAt),
-    timelineDay(records, intervals, todayStart - DAY_MS, todayStart, earliestAt),
-  ];
+  return [0, 1, 2].map((d) => {
+    const start = todayStart - d * DAY_MS;
+    return timelineDay(records, intervals, start, d === 0 ? now : start + DAY_MS, earliestAt);
+  });
+}
+
+/**
+ * 直前の時間(分)。最後の記録が「起きる」なら直前の睡眠の長さ、「寝る」なら直前の活動(前に起きてから寝るまで)の長さ。
+ * 分からなければ null。
+ */
+export function previousSpanMinutes(records: readonly StatRecord[], now: number): number | null {
+  const events = records.filter((r) => r.type === SLEEP_TYPE || r.type === WAKE_TYPE).sort((a, b) => a.at - b.at);
+  const last = events.at(-1);
+  if (!last) return null;
+  const intervals = sleepIntervals(records, now);
+  if (last.type === WAKE_TYPE) {
+    const sleep = intervals.at(-1);
+    return sleep && sleep.end === last.at ? Math.round((sleep.end - sleep.start) / 60000) : null;
+  }
+  // 寝ている: 今の睡眠の始まりと、その前の睡眠の終わり(起きた時刻)の間
+  const [prev, current] = intervals.slice(-2);
+  return prev && current ? Math.round((current.start - prev.end) / 60000) : null;
 }

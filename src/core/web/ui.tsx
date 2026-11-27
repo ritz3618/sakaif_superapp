@@ -17,21 +17,32 @@ function cx(...names: (string | false | null | undefined)[]): string {
 /** 注意を引きたいとき(基準の時間を過ぎた、いつもより少ない、など)の見た目 */
 export type Tone = "normal" | "warn";
 
-/** 見出し付きの枠。tone="warn" で、枠を注意の色にする */
+/**
+ * 見出し付きの枠。tone="warn" で、枠を注意の色にする。
+ * aside は見出しの右に並べる大きな値(例: 「5時間15分前」)。画面を詰めたいときに使う。
+ */
 export function Panel({
   title,
+  aside,
   children,
   className,
   tone = "normal",
 }: {
   title?: ReactNode;
+  aside?: ReactNode;
   children: ReactNode;
   className?: string;
   tone?: Tone;
 }) {
   return (
     <section className={cx("panel", "ui-panel", tone === "warn" && "ui-panel--warn", className)}>
-      {title && <h2 className="ui-panel__title">{title}</h2>}
+      {title && !aside && <h2 className="ui-panel__title">{title}</h2>}
+      {title && aside && (
+        <div className="ui-panel__head">
+          <h2 className="ui-panel__title">{title}</h2>
+          <span className={cx("ui-panel__aside", tone === "warn" && "ui-panel__aside--warn")}>{aside}</span>
+        </div>
+      )}
       {children}
     </section>
   );
@@ -107,13 +118,16 @@ export function CompareTable({
   caption,
   headers,
   rows,
+  dense = false,
 }: {
   caption?: ReactNode;
   headers: [ReactNode, ReactNode, ReactNode];
   rows: readonly CompareRow[];
+  /** 行の高さを詰める */
+  dense?: boolean;
 }) {
   return (
-    <table className="ui-compare">
+    <table className={cx("ui-compare", dense && "ui-compare--dense")}>
       {caption && <caption className="ui-compare__caption">{caption}</caption>}
       <thead>
         <tr>
@@ -268,5 +282,59 @@ export function FileButton({
         }}
       />
     </label>
+  );
+}
+
+export interface BulletMark {
+  value: number;
+  /** typical: ふだんの値などの参考(点線)、target: 目安(太い線) */
+  kind: "typical" | "target";
+  /** 右側に出す説明(例: 「ふだん 509ml」) */
+  label: ReactNode;
+  /** 今の値との差の向き(色に使う) */
+  direction?: TrendDirection;
+}
+
+/**
+ * 1本の横棒で、今の値と、参考の値・目安を重ねて見せる(ブレット・グラフ)。
+ * 棒 = 今の値、点線 = 参考(ふだん)、太い線 = 目安。
+ */
+export function BulletBar({
+  label,
+  value,
+  valueText,
+  marks,
+  warning,
+}: {
+  label: ReactNode;
+  value: number;
+  valueText: ReactNode;
+  marks: readonly BulletMark[];
+  warning?: ReactNode;
+}) {
+  const max = Math.max(value, ...marks.map((m) => m.value), 1) * 1.08;
+  const pct = (v: number) => `${(Math.max(0, v) / max) * 100}%`;
+  return (
+    <div className={cx("ui-bullet", warning != null && "ui-bullet--warn")}>
+      <div className="ui-bullet__head">
+        <span className="ui-bullet__label">{label}</span>
+        <span className="ui-bullet__value">{valueText}</span>
+        <span className="ui-bullet__marks">
+          {marks.map((m, i) => (
+            <span key={i} className={cx("ui-bullet__mark-label", m.direction && `ui-trend--${m.direction}`)}>
+              <span className={`ui-bullet__key ui-bullet__key--${m.kind}`} aria-hidden="true" />
+              {m.label}
+            </span>
+          ))}
+        </span>
+      </div>
+      <div className="ui-bullet__track">
+        <span className="ui-bullet__bar" style={{ width: pct(value) }} />
+        {marks.map((m, i) => (
+          <span key={i} className={`ui-bullet__mark ui-bullet__mark--${m.kind}`} style={{ left: pct(m.value) }} />
+        ))}
+      </div>
+      {warning != null && <span className="ui-bullet__warning">⚠ {warning}</span>}
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * 今日と昨日の時間の帯(0〜24時)。
+ * 今日・昨日・2日前の時間の帯(0〜24時)。
  * 寝ている時間と起きている時間を背景に、授乳(飲み始めから30分)とうんち(15分)を、帯の下半分に印として重ねる。
  * 色は web/piyolog.css の変数で決める。
  */
@@ -40,11 +40,12 @@ function toRow(day: TimelineDay, label: string, marker?: number): TimelineRow {
   return { label, segments, until: day.until, marker };
 }
 
+const DAY_LABELS = ["今日", "昨日", "2日前"];
+
 export function DayTimeline({ days, nowMinute }: { days: readonly TimelineDay[]; nowMinute?: number }) {
-  const [today, yesterday] = days;
-  const rows: TimelineRow[] = [];
-  if (today) rows.push(toRow(today, `今日\n${shortDate(today.date)}`, nowMinute));
-  if (yesterday) rows.push(toRow(yesterday, `昨日\n${shortDate(yesterday.date)}`));
+  const rows: TimelineRow[] = days.map((day, i) =>
+    toRow(day, `${DAY_LABELS[i] ?? ""}\n${shortDate(day.date)}`, i === 0 ? nowMinute : undefined),
+  );
   return (
     <div className="piyolog-timeline">
       <Timeline
@@ -55,8 +56,8 @@ export function DayTimeline({ days, nowMinute }: { days: readonly TimelineDay[];
         legend={[
           { label: "睡眠", color: COLORS.sleep },
           { label: "起きている", color: COLORS.awake },
-          { label: "授乳(開始から30分)", color: COLORS.feeding },
-          { label: "うんち(15分)", color: COLORS.poop },
+          { label: "授乳", color: COLORS.feeding },
+          { label: "うんち", color: COLORS.poop },
         ]}
       />
     </div>

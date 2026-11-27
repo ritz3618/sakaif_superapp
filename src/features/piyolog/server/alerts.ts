@@ -4,6 +4,7 @@
  * - おむつ替え: 最後のおしっこ・うんちの記録から、設定の間隔がたったら通知する。
  * - 重複防止のキーを「最後の記録の event_id」にするので、次の記録が入るまで再通知しない。
  *   設定の間隔を変えても、送信済みの通知には影響しない(同じキーは二度と送らない)。
+ * - 活動限界: 最後の睡眠の記録が「起きる」で、そこから設定の活動限界がたったら通知する(2026-11-27 ユーザー)。
  * - フィードURLの期限: 作成日から89日を期限の目安とし、その7日前から1回だけ知らせる。
  */
 import { addDays, jstDate, jstTime } from "../../../core/shared/time";
@@ -19,7 +20,7 @@ export interface LastRecord {
 }
 
 export interface Alert {
-  type: "feeding_due" | "diaper_due" | "feed_expiring";
+  type: "feeding_due" | "diaper_due" | "feed_expiring" | "awake_too_long";
   dedupeKey: string;
   title: string;
   body: string;
@@ -48,6 +49,19 @@ export function diaperAlert(last: LastRecord | null, intervalMinutes: number, no
     dedupeKey: `diaper:${last.eventId}`,
     title: `おむつ替えから${formatMinutes(elapsed)}たちました`,
     body: `最後の記録は${typeLabel(last.type)}(${jstTime(new Date(last.at))})`,
+  };
+}
+
+/** last は、睡眠の記録(寝る・起きる)のうち最後のもの。「起きる」のときだけ判定する */
+export function awakeAlert(last: LastRecord | null, limitMinutes: number, now: number): Alert | null {
+  if (!last || last.type !== "WakeUp") return null;
+  const elapsed = minutesBetween(last.at, now);
+  if (elapsed < limitMinutes) return null;
+  return {
+    type: "awake_too_long",
+    dedupeKey: `awake:${last.eventId}`,
+    title: `活動限界(${formatMinutes(limitMinutes)})を過ぎました`,
+    body: `起きてから${formatMinutes(elapsed)}たちました(${jstTime(new Date(last.at))}に起きました)`,
   };
 }
 
