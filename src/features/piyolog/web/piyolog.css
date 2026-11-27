@@ -179,3 +179,92 @@
 .piyolog-loading {
   min-height: 60px;
 }
+
+/* グラフの画面 */
+.piyolog-graphnav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.piyolog-segment {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.piyolog-segment button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--font-sm);
+}
+
+.piyolog-segment button + button {
+  border-left: 1px solid var(--border);
+}
+
+.piyolog-segment .piyolog-segment__on {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.piyolog-graphnav__range {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.piyolog-table summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.piyolog-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-xs);
+}
+
+.piyolog-table th,
+.piyolog-table td {
+  padding: 4px;
+  border-top: 1px solid var(--border);
+  text-align: right;
+}
+
+.piyolog-table th:first-child {
+  text-align: left;
+}
+
+.piyolog-sync__buttons {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.piyolog-graph-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  min-height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: var(--font-sm);
+  font-weight: 700;
+  text-decoration: none;
+}

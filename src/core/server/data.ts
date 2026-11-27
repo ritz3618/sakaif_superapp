@@ -63,11 +63,16 @@ export interface SharedDataReader {
   /** 記録の件数と、いちばん古い・新しい記録の日時(削除の印が付いたものは除く) */
   stats(source: string): Promise<{ count: number; earliestAt: string | null; latestAt: string | null }>;
   /** 種類ごとの件数・最小・最大・平均(データベースの中で計算するので、記録が多くても軽い) */
-  aggregate(source: string, query: { kinds?: readonly string[]; from?: string; to?: string }): Promise<DataAggregate[]>;
+  aggregate(
+    source: string,
+    query: { kinds?: readonly string[]; from?: string; to?: string; byJstDay?: boolean },
+  ): Promise<DataAggregate[]>;
 }
 
 export interface DataAggregate {
   kind: string;
+  /** byJstDay のとき、日本時間の日付(YYYY-MM-DD) */
+  day?: string;
   count: number;
   min: number | null;
   max: number | null;
@@ -245,9 +250,12 @@ function reader(db: D1Database): SharedDataReader {
         where.push(`kind IN (${q.kinds.map(() => "?").join(",")})`);
         binds.push(...q.kinds);
       }
+      // 日ごとにまとめるときは、日本時間(+9時間)の日付で分ける
+      const day = q.byJstDay ? ", substr(datetime(recorded_at, '+9 hours'), 1, 10) AS day" : "";
+      const group = q.byJstDay ? "kind, day" : "kind";
       const rows = await db
         .prepare(
-          `SELECT kind, COUNT(*) AS count, MIN(value) AS min, MAX(value) AS max, AVG(value) AS avg FROM core_records WHERE ${where.join(" AND ")} GROUP BY kind`,
+          `SELECT kind${day}, COUNT(*) AS count, MIN(value) AS min, MAX(value) AS max, AVG(value) AS avg FROM core_records WHERE ${where.join(" AND ")} GROUP BY ${group}`,
         )
         .bind(...binds)
         .all<DataAggregate>();

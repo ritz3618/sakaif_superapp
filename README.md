@@ -47,7 +47,8 @@ test/                  単体テストと、境界ルールの検査
      読み出しは、どの機能からも `ctx.data.query(source, ...)` / `ctx.data.latest(...)` / `ctx.data.aggregate(...)`(件数・最小・最大・平均を
      データベースの中で計算)でできる。書けるのは宣言した機能だけ。古い細かい記録をまとめ直したあとは `ctx.data.purge(...)` で消せる。
    - 見た目: 画面は `core/web/feature-api` の共通部品(`Panel`、`Stat`、`StatGrid`、`BigValue`、`Trend`、`Note`、`Button`、
-     `CompareTable`(比べる表)、`PaceBar`(1日の中での進み具合の棒)、`Timeline`(時間の帯)、`FileButton`)で作る。注意を引きたいときは `tone="warn"`。
+     `CompareTable`(比べる表)、`PaceBar`(1日の中での進み具合の棒)、`Timeline`(時間の帯)、`FileButton`、
+     `BarChart` / `LineChart`(グラフ。1つのグラフに1つの値、縦軸は1本))で作る。注意を引きたいときは `tone="warn"`。
      機能ごとの調整は、その機能の CSS に、クラス名「<フォルダ名>-」か `[data-feature="<機能ID>"]` の中でだけ書く。
      共通の値(`--radius-lg`、`--font-xl` など)も、`[data-feature="<機能ID>"]` の中で上書きできる。機能の色は `var(--feature-color)`。
 3. 守ること(`npm test` で自動検査):
