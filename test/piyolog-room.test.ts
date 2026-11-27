@@ -2,7 +2,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { alertMetrics, roomAlert } from "../src/features/piyolog/server/room-alerts";
-import { toRecords } from "../src/features/piyolog/server/room";
+import { rollupOldReadings, roomDayStats, toRecords } from "../src/features/piyolog/server/room";
 import { isHubType, isMeterType, listDevices, meterStatus, sign, SwitchBotError, viaHub } from "../src/features/piyolog/server/switchbot";
 import type { Thresholds } from "../src/features/piyolog/shared/room-api";
 import { evaluate, warningText } from "../src/features/piyolog/shared/room-thresholds";
@@ -109,5 +109,69 @@ describe("基準と通知", () => {
     ]);
     expect(JSON.parse(records[0]!.payload!)).toEqual({ deviceName: "寝室", warning: { direction: "low", threshold: 20 } });
     expect(JSON.parse(records[1]!.payload!).warning).toBeNull();
+  });
+});
+
+describe("古い室温・湿度のまとめ直し", () => {
+  type Row = { source: string; id: string; kind: string; recordedAt: string; value: number | null; payload: string | null };
+  function fake(rows: Row[]) {
+    const inRange = (r: Row, q: { kinds?: readonly string[]; from?: string; to?: string }) =>
+      (!q.kinds || q.kinds.includes(r.kind)) && (!q.from || r.recordedAt >= q.from) && (!q.to || r.recordedAt < q.to);
+    return {
+      rows,
+      async query(_s: string, q: { kinds?: readonly string[]; from?: string; to?: string; order?: string; limit?: number } = {}) {
+        const out = rows.filter((r) => inRange(r, q)).sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+        if (q.order === "desc") out.reverse();
+        return (q.limit ? out.slice(0, q.limit) : out).map((r) => ({ ...r, unit: null, note: null, firstSeenAt: "", updatedAt: "", deletedAt: null }));
+      },
+      async aggregate(_s: string, q: { kinds?: readonly string[]; from?: string; to?: string }) {
+        const groups = new Map<string, number[]>();
+        for (const r of rows.filter((x) => inRange(x, q) && x.value !== null)) groups.set(r.kind, [...(groups.get(r.kind) ?? []), r.value!]);
+        return [...groups].map(([kind, v]) => ({ kind, count: v.length, min: Math.min(...v), max: Math.max(...v), avg: v.reduce((a, b) => a + b, 0) / v.length }));
+      },
+      async upsert(_s: string, input: { id: string; kind: string; recordedAt: string; value?: number | null; payload?: string | null }[]) {
+        for (const r of input) rows.push({ source: "switchbot", id: r.id, kind: r.kind, recordedAt: r.recordedAt, value: r.value ?? null, payload: r.payload ?? null });
+        return { written: input.length };
+      },
+      async purge(_s: string, q: { kinds?: readonly string[]; from: string; to: string }) {
+        const before = rows.length;
+        for (let i = rows.length - 1; i >= 0; i--) if (inRange(rows[i]!, q)) rows.splice(i, 1);
+        return { deleted: before - rows.length };
+      },
+    };
+  }
+  const raw = (kind: string, jst: string, value: number): Row => {
+    const at = new Date(`${jst}+09:00`).toISOString();
+    return { source: "switchbot", id: `D:${kind}:${at}`, kind, recordedAt: at, value, payload: null };
+  };
+
+  it("30日より古い日を、1日ごとの最低・最高・平均にまとめて、元の値を消す(1回に1日分)", async () => {
+    const data = fake([
+      raw("temperature", "2026-10-01T08:00:00", 18),
+      raw("temperature", "2026-10-01T14:00:00", 22),
+      raw("humidity", "2026-10-01T08:00:00", 40),
+      raw("temperature", "2026-10-02T08:00:00", 20),
+      raw("temperature", "2026-11-20T08:00:00", 21), // 30日以内は残す
+    ]);
+    const now = new Date("2026-11-27T12:00:00+09:00");
+    expect(await rollupOldReadings(data as never, now)).toBe("2026-10-01");
+    const daily = data.rows.filter((r) => r.kind.endsWith("_daily"));
+    expect(daily.map((r) => [r.id, r.value, JSON.parse(r.payload!)])).toEqual([
+      ["daily:temperature:2026-10-01", 20, { min: 18, max: 22, avg: 20, count: 2 }],
+      ["daily:humidity:2026-10-01", 40, { min: 40, max: 40, avg: 40, count: 1 }],
+    ]);
+    expect(data.rows.filter((r) => !r.kind.endsWith("_daily")).map((r) => r.kind)).toEqual(["temperature", "temperature"]);
+    expect(data.rows.some((r) => r.kind === "temperature" && r.recordedAt.startsWith("2026-09-30T2"))).toBe(false); // 10/1 の分(UTC では前日の夜)は消えた
+    expect(await rollupOldReadings(data as never, now)).toBe("2026-10-02");
+    expect(await rollupOldReadings(data as never, now)).toBeNull();
+    expect(data.rows.filter((r) => r.kind === "temperature")).toHaveLength(1);
+  });
+
+  it("その日の最低・最高・平均は、細かい値が無ければ1日ごとのまとめから読む", async () => {
+    const data = fake([raw("temperature", "2026-11-26T08:00:00", 19), raw("temperature", "2026-11-26T20:00:00", 23)]);
+    expect(await roomDayStats(data as never, "2026-11-26")).toEqual({ temperature: { min: 19, max: 23, avg: 21 }, humidity: null });
+    await rollupOldReadings(data as never, new Date("2027-01-10T00:00:00+09:00"));
+    expect(await roomDayStats(data as never, "2026-11-26")).toEqual({ temperature: { min: 19, max: 23, avg: 21 }, humidity: null });
+    expect(await roomDayStats(data as never, "2026-11-25")).toBeNull();
   });
 });

@@ -963,6 +963,7 @@ button.button--small {
 .ui-pace__value {
   font-size: var(--font-lg);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .ui-pace--behind .ui-pace__value {

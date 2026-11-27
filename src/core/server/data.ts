@@ -62,6 +62,16 @@ export interface SharedDataReader {
   earliestAt(source: string): Promise<string | null>;
   /** 記録の件数と、いちばん古い・新しい記録の日時(削除の印が付いたものは除く) */
   stats(source: string): Promise<{ count: number; earliestAt: string | null; latestAt: string | null }>;
+  /** 種類ごとの件数・最小・最大・平均(データベースの中で計算するので、記録が多くても軽い) */
+  aggregate(source: string, query: { kinds?: readonly string[]; from?: string; to?: string }): Promise<DataAggregate[]>;
+}
+
+export interface DataAggregate {
+  kind: string;
+  count: number;
+  min: number | null;
+  max: number | null;
+  avg: number | null;
 }
 
 /** 読み出しと、自分が宣言した source への書き込み */
@@ -76,6 +86,11 @@ export interface SharedData extends SharedDataReader {
   ): Promise<SnapshotResult>;
   /** 記録を追加・更新する(追記していく種類のデータ向け)。変わっていない記録は書かない。 */
   upsert(source: string, records: readonly DataRecordInput[]): Promise<{ written: number }>;
+  /**
+   * 期間の記録を、データベースから完全に消す(まとめ直した古い細かい記録の削除など)。
+   * 削除の印ではなく、行そのものを消す。from と to の両方が必要。
+   */
+  purge(source: string, query: { kinds?: readonly string[]; from: string; to: string }): Promise<{ deleted: number }>;
 }
 
 // ---- 純粋な計算(テストで確認している) ----
@@ -215,6 +230,29 @@ function reader(db: D1Database): SharedDataReader {
         .first<{ at: string | null }>();
       return row?.at ?? null;
     },
+    async aggregate(source, q) {
+      const where = ["source = ?", "deleted_at IS NULL", "value IS NOT NULL"];
+      const binds: unknown[] = [source];
+      if (q.from) {
+        where.push("recorded_at >= ?");
+        binds.push(new Date(q.from).toISOString());
+      }
+      if (q.to) {
+        where.push("recorded_at < ?");
+        binds.push(new Date(q.to).toISOString());
+      }
+      if (q.kinds?.length) {
+        where.push(`kind IN (${q.kinds.map(() => "?").join(",")})`);
+        binds.push(...q.kinds);
+      }
+      const rows = await db
+        .prepare(
+          `SELECT kind, COUNT(*) AS count, MIN(value) AS min, MAX(value) AS max, AVG(value) AS avg FROM core_records WHERE ${where.join(" AND ")} GROUP BY kind`,
+        )
+        .bind(...binds)
+        .all<DataAggregate>();
+      return rows.results;
+    },
     async stats(source) {
       const row = await db
         .prepare(
@@ -293,6 +331,17 @@ export function sharedData(db: D1Database, ownedSources: readonly string[]): Sha
       const plan = planSnapshot(snapshot, refs);
       await write(db, source, plan, new Date().toISOString());
       return { received: snapshot.records.length, written: plan.upserts.length, deleted: plan.deletes.length };
+    },
+    async purge(source, q) {
+      assertOwner(source);
+      const where = ["source = ?", "recorded_at >= ?", "recorded_at < ?"];
+      const binds: unknown[] = [source, new Date(q.from).toISOString(), new Date(q.to).toISOString()];
+      if (q.kinds?.length) {
+        where.push(`kind IN (${q.kinds.map(() => "?").join(",")})`);
+        binds.push(...q.kinds);
+      }
+      const result = await db.prepare(`DELETE FROM core_records WHERE ${where.join(" AND ")}`).bind(...binds).run();
+      return { deleted: result.meta.changes ?? 0 };
     },
     async upsert(source, records) {
       assertOwner(source);

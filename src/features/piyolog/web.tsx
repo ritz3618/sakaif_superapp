@@ -6,7 +6,7 @@
  * 経過時間は30秒ごと、データは1分ごとに更新する。
  * 見た目は共通の部品(Panel、PaceBar など)で作り、この機能だけの調整は web/piyolog.css に書く。
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Button,
   Link,
@@ -19,25 +19,16 @@ import {
   type FeatureScreenProps,
 } from "../../core/web/feature-api";
 import type { DayMetrics, LatestValue, PiyologSummary } from "./shared/api";
-import { jstMinuteOfDay } from "../../core/shared/time";
+import { jstDate, jstMinuteOfDay } from "../../core/shared/time";
 import { formatMinutes, formatMl, minutesBetween } from "./shared/format";
 import { compare, isShort, type CompareUnit } from "./web/compare";
 import DataPage from "./web/DataPage";
+import { DateNav } from "./web/DateNav";
+import { PastDayScreen } from "./web/PastDay";
 import { DayTimeline } from "./web/DayTimeline";
+import { Diff, elapsedSince, formatCount, Rest, RoomDayLine, ROOM_LABEL, ROOM_UNIT, VitalsPanel } from "./web/parts";
 import { timeOf } from "./web/time";
 import "./web/piyolog.css";
-
-function elapsedSince(iso: string | null, now: number): string | null {
-  return iso ? formatMinutes(minutesBetween(Date.parse(iso), now)) : null;
-}
-
-const formatCount = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}回`;
-
-function formatBy(unit: CompareUnit, value: number): string {
-  if (unit === "ml") return formatMl(value);
-  if (unit === "minutes") return formatMinutes(Math.round(value));
-  return formatCount(value);
-}
 
 /**
  * 1日の目安量のうち、今の時刻までに飲む分の目安。
@@ -47,33 +38,6 @@ function targetUpToNow(target: number, typicalNow: number | null, typicalDay: nu
   if (typicalNow !== null && typicalDay !== null && typicalDay > 0) return target * Math.min(1, typicalNow / typicalDay);
   return (target * jstMinuteOfDay(new Date(now))) / 1440;
 }
-
-/** 差の表示(例: 「+26ml ↑」)。数値そのものを比べる */
-function Diff({ value, reference, unit }: { value: number; reference: number; unit: CompareUnit }) {
-  const c = compare(value, reference, unit);
-  return <Trend direction={c.direction}>{c.diffText}</Trend>;
-}
-
-/** 1日の基準まで、あといくつか(届いていれば「到達」) */
-function Rest({ value, goal, unit, label }: { value: number; goal: number; unit: CompareUnit; label: string }) {
-  const c = compare(value, goal, unit);
-  if (c.direction !== "less") return <>{label}に到達</>;
-  return (
-    <>
-      {label}まで あと<strong>{formatBy(unit, goal - value)}</strong>
-    </>
-  );
-}
-
-const UNIT_LABELS: Record<string, string> = { celsius: "℃", kg: "kg", cm: "cm", ml: "ml" };
-
-function formatLatest(v: LatestValue | null, digits: number): string {
-  if (!v || v.value === null) return "記録なし";
-  return `${v.value.toFixed(digits)}${v.unit ? (UNIT_LABELS[v.unit] ?? v.unit) : ""}`;
-}
-
-const ROOM_LABEL = { temperature: "室温", humidity: "湿度" } as const;
-const ROOM_UNIT = { temperature: "℃", humidity: "%" } as const;
 
 /** 室温・湿度(室温・湿度の機能が保存した値を、共通データから読んで表示する) */
 function RoomPanel({ room, now }: { room: NonNullable<PiyologSummary["room"]>; now: number }) {
@@ -88,7 +52,9 @@ function RoomPanel({ room, now }: { room: NonNullable<PiyologSummary["room"]>; n
             label={ROOM_LABEL[metric]}
             value={room[metric] === null ? "—" : `${room[metric]}${ROOM_UNIT[metric]}`}
             tone={warn(metric) ? "warn" : "normal"}
-          />
+          >
+            <RoomDayLine stats={room.day} metric={metric} />
+          </Stat>
         ))}
       </StatGrid>
       {room.warnings.map((w) => (
@@ -103,8 +69,15 @@ function RoomPanel({ room, now }: { room: NonNullable<PiyologSummary["room"]>; n
   );
 }
 
-function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
-  const [summary, setSummary] = useState<PiyologSummary | null>(null);
+/** 最後に読んだ今日のまとめ(過去の日から今日に戻ったとき、待たずにすぐ出すため) */
+let lastSummary: PiyologSummary | null = null;
+
+function MainScreen({ apiFetch, feature, nav }: FeatureScreenProps & { nav: ReactNode }) {
+  const [summary, setSummaryState] = useState<PiyologSummary | null>(lastSummary);
+  const setSummary = useCallback((value: PiyologSummary) => {
+    lastSummary = value;
+    setSummaryState(value);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [refreshing, setRefreshing] = useState(false);
@@ -117,7 +90,7 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [apiFetch]);
+  }, [apiFetch, setSummary]);
 
   useEffect(() => {
     void load();
@@ -142,8 +115,8 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
     }
   };
 
-  if (error && !summary) return <Note tone="error">{error}</Note>;
-  if (!summary) return <Note>読み込み中…</Note>;
+  if (error && !summary) return <>{nav}<Note tone="error">{error}</Note></>;
+  if (!summary) return <>{nav}<Note>読み込み中…</Note></>;
 
   const dataLink = `/${feature.id}/data/`;
   if (!summary.configured) {
@@ -190,6 +163,7 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
 
   return (
     <div className="piyolog-screen">
+      {nav}
       <div className="piyolog-sync">
         <span>
           最終取得 {sync.lastSuccessAt ? timeOf(sync.lastSuccessAt) : "まだありません"}
@@ -322,22 +296,7 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
 
       {summary.room && <RoomPanel room={summary.room} now={now} />}
 
-      <Panel title="最近の記録">
-        <StatGrid>
-          <Stat label="体温" value={formatLatest(latest.temperature, 1)}>
-            <span className="note">{timeOf(latest.temperature?.at ?? null)}</span>
-          </Stat>
-          <Stat label="体重" value={formatLatest(latest.weight, 2)}>
-            <span className="note">{timeOf(latest.weight?.at ?? null)}</span>
-          </Stat>
-          <Stat label="身長" value={formatLatest(latest.height, 1)}>
-            <span className="note">{timeOf(latest.height?.at ?? null)}</span>
-          </Stat>
-          <Stat label="お風呂" value={latest.bath ? timeOf(latest.bath.at) : "記録なし"}>
-            {latest.bath && <span className="note">{elapsedSince(latest.bath.at, now)}前</span>}
-          </Stat>
-        </StatGrid>
-      </Panel>
+      <VitalsPanel latest={latest} now={now} title="最近の記録" />
 
       <Panel title="1週間の過ごし方">
         <DayTimeline days={summary.timeline} nowMinute={summary.timeline[0]?.until} />
@@ -358,7 +317,16 @@ function MainScreen({ apiFetch, feature }: FeatureScreenProps) {
   );
 }
 
+/** メインの画面。表示する日が今日なら今日の画面、それ以外は過去の日の画面(2026-11-27 ユーザー) */
+function DayScreens(props: FeatureScreenProps) {
+  const today = jstDate(new Date());
+  const [date, setDate] = useState(today);
+  const nav = <DateNav date={date} today={today} onChange={(d) => setDate(d > today ? today : d)} />;
+  if (date >= today) return <MainScreen {...props} nav={nav} />;
+  return <PastDayScreen apiFetch={props.apiFetch} date={date} nav={nav} />;
+}
+
 export default function IkujiLogScreen(props: FeatureScreenProps) {
   if (props.subPath.startsWith("/data")) return <DataPage {...props} />;
-  return <MainScreen {...props} />;
+  return <DayScreens {...props} />;
 }

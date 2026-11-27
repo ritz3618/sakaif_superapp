@@ -5,6 +5,7 @@
  */
 import { Timeline, type TimelineRow, type TimelineSegment } from "../../../core/web/feature-api";
 import type { TimelineDay } from "../shared/api";
+import { dateLabel } from "./DateNav";
 import { minuteLabel, shortDate } from "./time";
 
 /** 表示の幅(2026-11-26 ユーザー指定)。サーバーの stats.ts の値と同じ */
@@ -42,9 +43,20 @@ function toRow(day: TimelineDay, label: string, marker?: number): TimelineRow {
 
 const dayLabel = (i: number) => (i === 0 ? "今日" : i === 1 ? "昨日" : `${i}日前`);
 
-export function DayTimeline({ days, nowMinute }: { days: readonly TimelineDay[]; nowMinute?: number }) {
+/**
+ * relative: 今日を起点にした表示(「今日」「昨日」「2日前」…)。false なら、日付と曜日だけ(過去の日を起点にした表示)。
+ */
+export function DayTimeline({
+  days,
+  nowMinute,
+  relative = true,
+}: {
+  days: readonly TimelineDay[];
+  nowMinute?: number;
+  relative?: boolean;
+}) {
   const rows: TimelineRow[] = days.map((day, i) =>
-    toRow(day, `${dayLabel(i)}\n${shortDate(day.date)}`, i === 0 ? nowMinute : undefined),
+    toRow(day, relative ? `${dayLabel(i)}\n${shortDate(day.date)}` : dateLabel(day.date).replace("(", "\n("), i === 0 ? nowMinute : undefined),
   );
   return (
     <div className="piyolog-timeline">

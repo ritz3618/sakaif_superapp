@@ -44,7 +44,8 @@ test/                  単体テストと、境界ルールの検査
    - 定期実行: `scheduled.run` が例外を投げると失敗として数え、続けて失敗したら全員にエラー通知を送る(各自オフにできる)。
    - 共通データ: ほかの機能と使い回したい記録(育児の記録、温湿度など)は、`feature.ts` の `dataSources` に出どころを宣言し、
      `ctx.data.applySnapshot(...)`(ある期間の全件を反映)や `ctx.data.upsert(...)`(追記)で、共通の表 `core_records` に書く。
-     読み出しは、どの機能からも `ctx.data.query(source, ...)` / `ctx.data.latest(...)` でできる。書けるのは宣言した機能だけ。
+     読み出しは、どの機能からも `ctx.data.query(source, ...)` / `ctx.data.latest(...)` / `ctx.data.aggregate(...)`(件数・最小・最大・平均を
+     データベースの中で計算)でできる。書けるのは宣言した機能だけ。古い細かい記録をまとめ直したあとは `ctx.data.purge(...)` で消せる。
    - 見た目: 画面は `core/web/feature-api` の共通部品(`Panel`、`Stat`、`StatGrid`、`BigValue`、`Trend`、`Note`、`Button`、
      `CompareTable`(比べる表)、`PaceBar`(1日の中での進み具合の棒)、`Timeline`(時間の帯)、`FileButton`)で作る。注意を引きたいときは `tone="warn"`。
      機能ごとの調整は、その機能の CSS に、クラス名「<フォルダ名>-」か `[data-feature="<機能ID>"]` の中でだけ書く。

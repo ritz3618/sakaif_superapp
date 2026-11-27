@@ -3,7 +3,7 @@
  * - 5分おきにフィードを取得して保存し、授乳・おむつ替え・フィードの期限の通知を判定する。
  * - 室温・湿度(SwitchBot)も5分おきに読んで共通データに保存し、基準の外が続いたら通知する(通知は初期値オフ)。
  * - 画面用の API: GET /summary、POST /refresh(今すぐ取得)、GET /data-info、POST /import(月ごとのテキストの取り込み)、
- *   GET /export.csv、GET /room(室温・湿度の状態)、GET /room/devices(SwitchBot の機器の確認)
+ *   GET /day・GET /week(過去の日の表示)、GET /export.csv、GET /room(室温・湿度の状態)、GET /room/devices(SwitchBot の機器の確認)
  */
 import { defineFeatureServer, featureContext, formatMinutesFromIso } from "./server/helpers";
 import { readRoomState, readSyncState } from "./server/repo";
@@ -11,7 +11,17 @@ import { buildRoomSummary, checkDevices, fetchReading } from "./server/room";
 import { SwitchBotError } from "./server/switchbot";
 import { recordsToCsv } from "./server/csv";
 import { importMonthlyText } from "./server/import";
-import { buildDataInfo, buildSummary, feedConfig, importCutoff, runScheduledJob, syncFeed } from "./server/service";
+import {
+  buildDataInfo,
+  buildDaySummary,
+  buildSummary,
+  buildWeek,
+  feedConfig,
+  importCutoff,
+  parseDay,
+  runScheduledJob,
+  syncFeed,
+} from "./server/service";
 import { DIAPER_TYPES, FEEDING_TYPES, PIYOLOG_SOURCE } from "./shared/records";
 import { TextImportError } from "./shared/text-import";
 
@@ -39,6 +49,22 @@ export default defineFeatureServer({
       if (due(state.lastAttemptAt)) await syncFeed(ctx.db, ctx.data, config.url, now).catch(() => undefined);
       if (due(roomState.lastAttemptAt)) await fetchReading(ctx.db, ctx.data, ctx.settings, now).catch(() => undefined);
       return c.json(await buildSummary(ctx.db, ctx.data, ctx.settings, new Date()));
+    });
+
+    // 過去の日の表示。まとめと1週間の帯を別々に読み、帯は軽いので先に出せる
+    app.get("/day", async (c) => {
+      const ctx = featureContext(c);
+      const day = parseDay(c.req.query("date"), new Date());
+      if (!day) return c.json({ error: "日付が正しくありません" }, 400);
+      return c.json(await buildDaySummary(ctx.data, ctx.settings, day));
+    });
+
+    app.get("/week", async (c) => {
+      const ctx = featureContext(c);
+      const now = new Date();
+      const day = parseDay(c.req.query("date"), now);
+      if (!day) return c.json({ error: "日付が正しくありません" }, 400);
+      return c.json(await buildWeek(ctx.data, day, now));
     });
 
     app.get("/data-info", async (c) => {

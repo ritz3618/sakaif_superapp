@@ -128,3 +128,54 @@
 [data-feature="piyolog"] .ui-timeline__row {
   margin-bottom: 6px;
 }
+
+/* 表示する日の切り替え */
+.piyolog-datenav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: -6px 0 var(--space-2);
+}
+
+.piyolog-datenav__date {
+  position: relative;
+  flex: 1;
+  text-align: center;
+  font-weight: 700;
+  font-size: var(--font-md);
+  padding: 6px 4px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.piyolog-datenav__date span::after {
+  content: " ▾";
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+
+/* カレンダーは日付の文字の上に透明に重ね、押すとそのまま開く */
+.piyolog-datenav__date input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+
+.piyolog-datenav__right {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.piyolog-roomday {
+  margin: 2px 0 0;
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+
+.piyolog-loading {
+  min-height: 60px;
+}
