@@ -25,8 +25,9 @@ function Card({ card }: { card: HomeCard }) {
     </>
   );
   if (card.kind === "external") {
+    // 外部のアプリは、同じ画面のまま移る(ホーム画面のアプリから Safari に切り替わらないように)
     return (
-      <a className="card" href={card.href} target="_blank" rel="noopener noreferrer">
+      <a className="card" href={card.href} rel="noreferrer">
         {content}
       </a>
     );

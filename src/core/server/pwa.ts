@@ -55,6 +55,23 @@ export function pwaTargets(features: readonly FeatureMeta[]): PwaTarget[] {
   return [app, ...internal];
 }
 
+/**
+ * アイコンを持つもの(本体・内部の機能・外部のアプリ)。外部のアプリは PWA にはしないが、ホームのカードのアイコンは持つ。
+ */
+export function iconTargets(features: readonly FeatureMeta[]): PwaTarget[] {
+  const external = features
+    .filter((f) => f.kind === "external")
+    .map<PwaTarget>((f) => ({
+      id: f.id,
+      name: f.name,
+      shortName: f.shortName ?? f.name,
+      color: f.color,
+      path: f.url ?? "/",
+      isApp: false,
+    }));
+  return [...pwaTargets(features), ...external];
+}
+
 /** パスから、どの PWA の画面かを決める("/<機能ID>/..." → その機能、それ以外 → 本体)。 */
 export function targetForPath(pathname: string, targets: readonly PwaTarget[]): PwaTarget {
   const first = pathname.split("/")[1] ?? "";

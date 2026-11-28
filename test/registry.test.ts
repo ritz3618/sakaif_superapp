@@ -8,8 +8,8 @@ import { featureMigrations } from "../src/features/registry.migrations";
 import { featureServers } from "../src/features/registry.server";
 
 describe("機能レジストリ", () => {
-  it("ホームには、育児ログとダミー1〜8の合計9個が、この順に並ぶ", () => {
-    expect(features.map((f) => f.name)).toEqual(["育児ログ", ...Array.from({ length: 8 }, (_, i) => `ダミー${i + 1}`)]);
+  it("ホームには、育児ログ・ストック管理とダミー1〜7の合計9個が、この順に並ぶ", () => {
+    expect(features.map((f) => f.name)).toEqual(["育児ログ", "ストック管理", ...Array.from({ length: 7 }, (_, i) => `ダミー${i + 1}`)]);
   });
 
   it("宣言に誤りがない", () => {
@@ -23,7 +23,7 @@ describe("機能レジストリ", () => {
   });
 
   it("サーバー側を持つ機能だけが、サーバーの一覧に入る", () => {
-    expect(featureServers.map((s) => s.meta.id)).toEqual(["piyolog"]);
+    expect(featureServers.map((s) => s.meta.id)).toEqual(["piyolog", "stock"]);
   });
 
   it("誤った宣言を検出できる", () => {

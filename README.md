@@ -23,7 +23,8 @@ src/
   features/
     registry*.ts       機能のフォルダを自動で集める
     piyolog/           育児ログ。feature.ts(宣言)/ server.ts / web.tsx / migrations/*.sql
-    dummy/             ダミー1〜8(ホームのカードを9枚にするための仮の機能)
+    stock/             ストック管理(外部のWebアプリを開くカード。行き先を押した人の設定から組み立てる)
+    dummy/             ダミー1〜7(ホームのカードを9枚にするための仮の機能)
 public/sw.js           Service Worker(通知の受信、タップしたときの画面遷移)
 test/                  単体テストと、境界ルールの検査
 ```
@@ -41,6 +42,9 @@ test/                  単体テストと、境界ルールの検査
      機能の画面の中の `/settings/` は共通部分が使うので、機能は自分の画面に使わない。
    - 通知: `feature.ts` の `notifications` に種類を宣言し、定期実行の中で `ctx.notify({ type, to, dedupeKey, title, body, url })` を呼ぶ。
      オン/オフ、通知を避ける時間帯(明けたときに送る)、重複防止(`dedupeKey` が同じなら1回だけ)、履歴は共通部分が処理する。
+   - 外部のアプリ: `kind: "external"` と `url` で、ホームに外部のアプリを開くカードが並ぶ(同じ画面のまま移る)。
+     人ごとに違う URL や、設定の秘密の値を含む URL は、server.ts の `openUrl(ctx)` でその場で組み立てる
+     (共通部分の /api/core/open/<機能ID> が、組み立てた URL へ移動させる。null なら設定画面を開く)。
    - 定期実行: `scheduled.run` が例外を投げると失敗として数え、続けて失敗したら全員にエラー通知を送る(各自オフにできる)。
    - 共通データ: ほかの機能と使い回したい記録(育児の記録、温湿度など)は、`feature.ts` の `dataSources` に出どころを宣言し、
      `ctx.data.applySnapshot(...)`(ある期間の全件を反映)や `ctx.data.upsert(...)`(追記)で、共通の表 `core_records` に書く。

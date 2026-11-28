@@ -55,6 +55,12 @@ export interface FeatureServer {
   routes?: (app: Hono<AppBindings>, feature: FeatureMeta) => void;
   /** ホームのカードに出す1行の要約 */
   homeSummary?: (ctx: FeatureRequestContext) => Promise<string | null>;
+  /**
+   * 外部のアプリを開く機能(kind: "external")で、押したときの行き先を、その場で組み立てる
+   * (使う人ごとに違う URL や、設定画面に保存した秘密の値を含む URL など)。
+   * null を返すと、その機能の設定画面を開く(必要な設定がまだ無いとき)。
+   */
+  openUrl?: (ctx: FeatureRequestContext) => Promise<string | null>;
   /** 定期実行の処理。1つの機能が失敗しても、他の機能は止まらない。 */
   scheduled?: {
     run(ctx: FeatureJobContext): Promise<void>;
