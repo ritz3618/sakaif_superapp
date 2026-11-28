@@ -75,12 +75,14 @@ export function registerHomeRoutes(
           }
         }
         const internal = f.kind === "internal";
+        // 外部のアプリで、行き先をその場で組み立てるものは、共通部分の「開く」を通す
+        const external = server?.openUrl ? `/api/core/open/${f.id}` : (f.url ?? "#");
         return {
           id: f.id,
           name: f.name,
           kind: f.kind,
-          href: internal ? featurePath(f.id) : (f.url ?? "#"),
-          iconUrl: versionedIconUrl(internal ? f.id : APP_INFO.id, versions),
+          href: internal ? featurePath(f.id) : external,
+          iconUrl: versionedIconUrl(f.id, versions),
           color: f.color,
           summary,
         };
@@ -94,7 +96,7 @@ export function registerHomeRoutes(
     const [order, versions] = await Promise.all([savedOrder(c.env.DB, user.id), iconVersions(c.env.DB)]);
     const items = applyHomeOrder(defaultIds, order).map((id): HomeOrderItem => {
       const f = features.find((x) => x.id === id)!;
-      return { id, name: f.name, iconUrl: versionedIconUrl(f.kind === "internal" ? f.id : APP_INFO.id, versions) };
+      return { id, name: f.name, iconUrl: versionedIconUrl(f.id, versions) };
     });
     return c.json({ items, isDefault: order === null });
   });

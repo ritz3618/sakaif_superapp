@@ -39,7 +39,7 @@ export function FeatureShell({
         <Header title={`${feature.name}の設定`} showHome />
         <main className="settings" data-feature={feature.id} style={{ ["--feature-color" as string]: feature.color }}>
           <div className="settings-nav">
-            <Link href={`/${feature.id}/`}>‹ {feature.name}に戻る</Link>
+            {feature.kind === "internal" ? <Link href={`/${feature.id}/`}>‹ {feature.name}に戻る</Link> : <Link href="/">‹ ホームに戻る</Link>}
             <Link href="/settings/">アプリ全体の設定 ›</Link>
           </div>
           <SettingsSections only={feature.id} />

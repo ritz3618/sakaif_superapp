@@ -8,7 +8,7 @@
  */
 import { Hono, type Context } from "hono";
 import type { JobStatus, MeResponse, PushSubscriptionInfo, PushTestResult, StatusResponse } from "../shared/api-types";
-import type { FeatureMeta } from "../shared/feature";
+import { featureSettingsPath, type FeatureMeta } from "../shared/feature";
 import { canRegisterPush } from "../shared/push-policy";
 import { authenticate, getOrCreateUser } from "./auth";
 import { ensureMigrated, type Migration } from "./db/migrate";
@@ -24,6 +24,7 @@ import {
   injectHead,
   loadIcon,
   pngDataUri,
+  iconTargets,
   pwaTargets,
   targetForPath,
   type IconSize,
@@ -59,6 +60,7 @@ function errorPage(status: number, message: string): Response {
 
 export function createApp(deps: AppDependencies): Hono<AppBindings> {
   const targets = pwaTargets(deps.features);
+  const icons = iconTargets(deps.features);
   const app = new Hono<AppBindings>();
 
   app.onError((error, c) => {
@@ -76,9 +78,10 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
 
   // ---- PWA(ログイン確認なし) ----
   app.get("/pwa/:target/:file", async (c) => {
-    const target = targets.find((t) => t.id === c.req.param("target"));
-    if (!target) return c.notFound();
     const file = c.req.param("file");
+    // manifest は PWA(本体と内部の機能)だけ。アイコンは外部のアプリのカードにも使う
+    const target = (file === "manifest.webmanifest" ? targets : icons).find((t) => t.id === c.req.param("target"));
+    if (!target) return c.notFound();
     if (file === "manifest.webmanifest") {
       const manifest = buildManifest(target, pngDataUri(await loadIcon(c.env.DB, target, 192)));
       return new Response(JSON.stringify(manifest), {
@@ -144,7 +147,29 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
     });
   });
 
-  registerHomeRoutes(app, deps.features, deps.servers, targets, deps.registry);
+  registerHomeRoutes(app, deps.features, deps.servers, icons, deps.registry);
+
+  // ---- 外部のアプリを開く(行き先をその場で組み立てて移動する) ----
+  app.get("/api/core/open/:id", async (c) => {
+    const meta = deps.features.find((f) => f.id === c.req.param("id") && f.kind === "external");
+    if (!meta) return c.json({ error: "見つかりません" }, 404);
+    const server = deps.servers.find((s) => s.meta.id === meta.id)?.server;
+    let url: string | null = meta.url ?? null;
+    if (server?.openUrl) {
+      url = await server.openUrl({
+        env: c.env,
+        db: c.env.DB,
+        user: c.get("user"),
+        feature: meta,
+        settings: featureSettings(c.env.DB, deps.registry, meta.id),
+        data: sharedData(c.env.DB, ownedSources(meta)),
+      });
+    }
+    // 行き先には秘密の値が入ることがあるので、どこにも保存させない
+    c.header("Cache-Control", "no-store");
+    c.header("Referrer-Policy", "no-referrer");
+    return c.redirect(url ?? featureSettingsPath(meta.id), 302);
+  });
   registerSettingsRoutes(app, deps.features, deps.registry);
 
   // ---- 通知の宛先登録(許可はスーパーアプリ本体で1回だけ行う) ----

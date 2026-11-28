@@ -1,6 +1,6 @@
 /** 画面全体の切り替え。どの機能があるかは引数で受け取り、個別の機能のことは知らない。 */
 import { APP_INFO } from "../shared/app";
-import type { FeatureMeta } from "../shared/feature";
+import { FEATURE_SETTINGS_SUBPATH, type FeatureMeta } from "../shared/feature";
 import { FeatureShell, type FeatureScreenLoader } from "./FeatureShell";
 import { Header } from "./Header";
 import { Home } from "./Home";
@@ -23,7 +23,9 @@ export function App({ features, loaders }: AppProps) {
   if (path.startsWith("/settings/")) return <SettingsPage appName={APP_INFO.name} features={features} />;
 
   const id = path.split("/")[1] ?? "";
-  const feature = features.find((f) => f.kind === "internal" && f.id === id);
+  // 外部のアプリは、設定画面(/<機能ID>/settings/)だけをこのアプリの中に持つ
+  const isSettings = path === `/${id}${FEATURE_SETTINGS_SUBPATH}`;
+  const feature = features.find((f) => f.id === id && (f.kind === "internal" || isSettings));
   if (feature) return <FeatureShell key={feature.id} feature={feature} loader={loaders[feature.id]} path={path} />;
 
   return (
