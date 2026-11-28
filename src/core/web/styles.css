@@ -108,6 +108,23 @@ a {
 
 .app-header__side--right {
   justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 外部のアプリを開くボタン(機能の headerLink) */
+.header-app-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .header-button {

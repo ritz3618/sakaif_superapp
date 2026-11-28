@@ -44,6 +44,11 @@ export interface FeatureMeta {
   settings?: SettingDef[];
   /** この機能が書き込む共通データの出どころ(ほかの機能と使い回したいデータ) */
   dataSources?: FeatureDataSource[];
+  /**
+   * 機能の画面の上(共通ヘッダー)に出す、外部のアプリを開くボタン(例: 記録を入力するアプリ)。
+   * url は https。iPhone では、アプリ側が登録したリンク(ユニバーサルリンク)なら、押すとそのアプリが立ち上がる。
+   */
+  headerLink?: { label: string; url: string };
 }
 
 const DATA_SOURCE_PATTERN = /^[a-z][a-z0-9._-]{1,40}$/;
@@ -112,6 +117,9 @@ export function validateFeatures(features: readonly FeatureMeta[]): string[] {
     }
     if (!COLOR_PATTERN.test(f.color)) {
       errors.push(`機能 "${f.id}" の色 "${f.color}" は #RRGGBB 形式にしてください`);
+    }
+    if (f.headerLink && !/^https:\/\//.test(f.headerLink.url)) {
+      errors.push(`${f.id}: headerLink の url は https で始めてください`);
     }
     if (f.kind === "external" && !f.url) {
       errors.push(`外部リンクの機能 "${f.id}" に url がありません`);

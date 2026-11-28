@@ -8,10 +8,12 @@ interface HeaderProps {
   showSettings?: boolean;
   /** 「設定」のリンク先(省略時はアプリ全体の設定 /settings/) */
   settingsHref?: string;
+  /** 右側に出す、外部のアプリを開くボタン */
+  appLink?: { label: string; url: string };
 }
 
 /** 共通ヘッダー。各機能の画面には、必ずホームへ戻るボタンが付く。 */
-export function Header({ title, showHome = false, showSettings = false, settingsHref = "/settings/" }: HeaderProps) {
+export function Header({ title, showHome = false, showSettings = false, settingsHref = "/settings/", appLink }: HeaderProps) {
   return (
     <header className="app-header">
       <div className="app-header__side">
@@ -23,6 +25,12 @@ export function Header({ title, showHome = false, showSettings = false, settings
       </div>
       <h1 className="app-header__title">{title}</h1>
       <div className="app-header__side app-header__side--right">
+        {appLink && (
+          // 同じ画面のままのリンクにする(ユニバーサルリンクなら、押すとそのアプリが立ち上がる)
+          <a href={appLink.url} className="header-app-button" rel="noreferrer">
+            {appLink.label}
+          </a>
+        )}
         {showSettings && (
           <Link href={settingsHref} className="header-button" aria-label="設定">
             設定
