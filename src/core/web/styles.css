@@ -112,7 +112,22 @@ a {
   gap: 2px;
 }
 
-/* 外部のアプリを開くボタン(機能の headerLink) */
+/* 外部のアプリを開くボタン(機能の headerLink)。アイコンがあるときは、アプリのアイコンの形で出す */
+.header-app-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.header-app-icon img {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
 .header-app-button {
   display: inline-flex;
   align-items: center;
