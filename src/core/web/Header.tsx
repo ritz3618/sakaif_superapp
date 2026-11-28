@@ -1,4 +1,19 @@
+import { useState } from "react";
 import { Link } from "./router";
+
+/**
+ * 外部のアプリを開くボタン。同じ画面のままのリンクにする(ユニバーサルリンクなら、押すとそのアプリが立ち上がる)。
+ * アイコンがあればアイコンだけを出し、読めなかったときは名前の文字にする。
+ */
+function AppLink({ label, url, icon }: { label: string; url: string; icon?: string }) {
+  const [broken, setBroken] = useState(false);
+  const showIcon = icon && !broken;
+  return (
+    <a href={url} className={showIcon ? "header-app-icon" : "header-app-button"} rel="noreferrer" aria-label={`${label}を開く`}>
+      {showIcon ? <img src={icon} alt="" width={30} height={30} referrerPolicy="no-referrer" onError={() => setBroken(true)} /> : label}
+    </a>
+  );
+}
 
 interface HeaderProps {
   title: string;
@@ -9,7 +24,7 @@ interface HeaderProps {
   /** 「設定」のリンク先(省略時はアプリ全体の設定 /settings/) */
   settingsHref?: string;
   /** 右側に出す、外部のアプリを開くボタン */
-  appLink?: { label: string; url: string };
+  appLink?: { label: string; url: string; icon?: string };
 }
 
 /** 共通ヘッダー。各機能の画面には、必ずホームへ戻るボタンが付く。 */
@@ -25,12 +40,7 @@ export function Header({ title, showHome = false, showSettings = false, settings
       </div>
       <h1 className="app-header__title">{title}</h1>
       <div className="app-header__side app-header__side--right">
-        {appLink && (
-          // 同じ画面のままのリンクにする(ユニバーサルリンクなら、押すとそのアプリが立ち上がる)
-          <a href={appLink.url} className="header-app-button" rel="noreferrer">
-            {appLink.label}
-          </a>
-        )}
+        {appLink && <AppLink {...appLink} />}
         {showSettings && (
           <Link href={settingsHref} className="header-button" aria-label="設定">
             設定

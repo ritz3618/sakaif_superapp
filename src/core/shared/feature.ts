@@ -48,7 +48,13 @@ export interface FeatureMeta {
    * 機能の画面の上(共通ヘッダー)に出す、外部のアプリを開くボタン(例: 記録を入力するアプリ)。
    * url は https。iPhone では、アプリ側が登録したリンク(ユニバーサルリンク)なら、押すとそのアプリが立ち上がる。
    */
-  headerLink?: { label: string; url: string };
+  headerLink?: {
+    /** ボタンの名前(アイコンがあるときは、読み上げと、アイコンを読めなかったときの表示に使う) */
+    label: string;
+    url: string;
+    /** ボタンに出すアイコンの画像(https)。省略すると、名前の文字を出す */
+    icon?: string;
+  };
 }
 
 const DATA_SOURCE_PATTERN = /^[a-z][a-z0-9._-]{1,40}$/;
@@ -118,8 +124,8 @@ export function validateFeatures(features: readonly FeatureMeta[]): string[] {
     if (!COLOR_PATTERN.test(f.color)) {
       errors.push(`機能 "${f.id}" の色 "${f.color}" は #RRGGBB 形式にしてください`);
     }
-    if (f.headerLink && !/^https:\/\//.test(f.headerLink.url)) {
-      errors.push(`${f.id}: headerLink の url は https で始めてください`);
+    if (f.headerLink && (!/^https:\/\//.test(f.headerLink.url) || (f.headerLink.icon && !/^https:\/\//.test(f.headerLink.icon)))) {
+      errors.push(`${f.id}: headerLink の url と icon は https で始めてください`);
     }
     if (f.kind === "external" && !f.url) {
       errors.push(`外部リンクの機能 "${f.id}" に url がありません`);
