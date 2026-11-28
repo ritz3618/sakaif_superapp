@@ -55,6 +55,7 @@ export function FeatureShell({
         showHome
         showSettings={hasSettings}
         settingsHref={featureSettingsPath(feature.id)}
+        appLink={feature.headerLink}
       />
       {/* data-feature と --feature-color で、機能ごとの見た目の調整を、この機能の画面の中だけに限る */}
       <main className="feature" data-feature={feature.id} style={{ ["--feature-color" as string]: feature.color }}>

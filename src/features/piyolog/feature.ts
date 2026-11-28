@@ -10,6 +10,9 @@ export default defineFeature({
   kind: "internal",
   color: "#E8A317",
   order: 10,
+  // 記録の入力はぴよログのアプリで行うので、画面の上から1タップで開けるようにする(2026-11-28 ユーザー)。
+  // このアドレスは、ぴよログの公式サイトの apple-app-site-association で、アプリを開くリンクとして登録されている。
+  headerLink: { label: "ぴよログ", url: "https://www.piyolog.com/app/piyolog/link/" },
   notifications: [
     { type: "feeding_due", label: "授乳の経過時間" },
     { type: "diaper_due", label: "おむつ替えの経過時間" },
