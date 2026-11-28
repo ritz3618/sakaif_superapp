@@ -1,6 +1,6 @@
 /** 各機能の画面の外枠。共通ヘッダー(ホームに戻るボタン付き)の下に、機能の画面を読み込んで表示する。 */
 import { lazy, Suspense, useMemo, type ComponentType } from "react";
-import { FEATURE_SETTINGS_SUBPATH, featureSettingsPath, type FeatureMeta } from "../shared/feature";
+import { FEATURE_SETTINGS_SUBPATH, featureSettingsPath, headerLinkIconId, type FeatureMeta } from "../shared/feature";
 import { apiFetch } from "./api";
 import type { FeatureScreenProps } from "./feature-api";
 import { Header } from "./Header";
@@ -55,7 +55,14 @@ export function FeatureShell({
         showHome
         showSettings={hasSettings}
         settingsHref={featureSettingsPath(feature.id)}
-        appLink={feature.headerLink}
+        appLink={
+          feature.headerLink && {
+            label: feature.headerLink.label,
+            url: feature.headerLink.url,
+            // 設定の「アイコン」で登録したもの(…-link)を優先し、無ければ宣言の icon、それも無ければ文字
+            icons: [`/pwa/${headerLinkIconId(feature.id)}/icon-180.png?custom=1`, ...(feature.headerLink.icon ? [feature.headerLink.icon] : [])],
+          }
+        }
       />
       {/* data-feature と --feature-color で、機能ごとの見た目の調整を、この機能の画面の中だけに限る */}
       <main className="feature" data-feature={feature.id} style={{ ["--feature-color" as string]: feature.color }}>

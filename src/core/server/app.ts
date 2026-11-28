@@ -25,6 +25,7 @@ import {
   loadIcon,
   pngDataUri,
   iconTargets,
+  loadStoredIcon,
   pwaTargets,
   targetForPath,
   type IconSize,
@@ -91,6 +92,12 @@ export function createApp(deps: AppDependencies): Hono<AppBindings> {
     const match = /^icon-(\d+)\.png$/.exec(file);
     const size = Number(match?.[1]) as IconSize;
     if (!match || !ICON_SIZES.includes(size)) return c.notFound();
+    // ?custom=1 は、登録されたアイコンだけを返す(無ければ 404。画面側は別の表示に切り替える)
+    if (c.req.query("custom")) {
+      const stored = await loadStoredIcon(c.env.DB, target.id, size);
+      if (!stored) return c.notFound();
+      return new Response(stored, { headers: { "Content-Type": "image/png", "Cache-Control": "private, no-cache" } });
+    }
     const png = await loadIcon(c.env.DB, target, size);
     // ?v=<更新時刻> 付きの URL は、画像を変えると URL も変わるので、長く保存してよい
     const cache = c.req.query("v") ? "private, max-age=31536000, immutable" : "private, max-age=3600";

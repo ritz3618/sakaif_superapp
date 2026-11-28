@@ -15,6 +15,7 @@ import type { FeatureMeta } from "../shared/feature";
 import { featurePath } from "../shared/feature";
 import { bytesToBase64 } from "./encoding";
 import { renderDefaultIcon } from "./png";
+import { headerLinkIconId } from "../shared/feature";
 
 export interface PwaTarget {
   id: string;
@@ -69,7 +70,28 @@ export function iconTargets(features: readonly FeatureMeta[]): PwaTarget[] {
       path: f.url ?? "/",
       isApp: false,
     }));
-  return [...pwaTargets(features), ...external];
+  // 画面の上の、外部のアプリを開くボタン(headerLink)のアイコン。設定の「アイコン」から登録できる
+  const links = features
+    .filter((f) => f.headerLink)
+    .map<PwaTarget>((f) => ({
+      id: headerLinkIconId(f.id),
+      name: `${f.name}(画面の上の「${f.headerLink!.label}」ボタン)`,
+      shortName: f.headerLink!.label,
+      color: f.color,
+      path: f.headerLink!.url,
+      isApp: false,
+    }));
+  return [...pwaTargets(features), ...external, ...links];
+}
+
+/** 登録(アップロード)されたアイコンだけを返す。無ければ null */
+export async function loadStoredIcon(db: D1Database, targetId: string, size: IconSize): Promise<Uint8Array | null> {
+  const row = await db
+    .prepare("SELECT png FROM core_icons WHERE target_id = ? AND size = ?")
+    .bind(targetId, size)
+    .first<{ png: ArrayBuffer | number[] }>();
+  if (!row) return null;
+  return row.png instanceof ArrayBuffer ? new Uint8Array(row.png) : Uint8Array.from(row.png);
 }
 
 /** パスから、どの PWA の画面かを決める("/<機能ID>/..." → その機能、それ以外 → 本体)。 */

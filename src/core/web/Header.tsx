@@ -3,14 +3,18 @@ import { Link } from "./router";
 
 /**
  * 外部のアプリを開くボタン。同じ画面のままのリンクにする(ユニバーサルリンクなら、押すとそのアプリが立ち上がる)。
- * アイコンがあればアイコンだけを出し、読めなかったときは名前の文字にする。
+ * アイコンは、設定の「アイコン」で登録したもの → 宣言の icon → 名前の文字 の順に、使えるものを出す。
  */
-function AppLink({ label, url, icon }: { label: string; url: string; icon?: string }) {
-  const [broken, setBroken] = useState(false);
-  const showIcon = icon && !broken;
+function AppLink({ label, url, icons }: { label: string; url: string; icons: readonly string[] }) {
+  const [failed, setFailed] = useState(0);
+  const icon = icons[failed];
   return (
-    <a href={url} className={showIcon ? "header-app-icon" : "header-app-button"} rel="noreferrer" aria-label={`${label}を開く`}>
-      {showIcon ? <img src={icon} alt="" width={30} height={30} referrerPolicy="no-referrer" onError={() => setBroken(true)} /> : label}
+    <a href={url} className={icon ? "header-app-icon" : "header-app-button"} rel="noreferrer" aria-label={`${label}を開く`}>
+      {icon ? (
+        <img key={icon} src={icon} alt="" width={30} height={30} referrerPolicy="no-referrer" onError={() => setFailed((n) => n + 1)} />
+      ) : (
+        label
+      )}
     </a>
   );
 }
@@ -23,8 +27,8 @@ interface HeaderProps {
   showSettings?: boolean;
   /** 「設定」のリンク先(省略時はアプリ全体の設定 /settings/) */
   settingsHref?: string;
-  /** 右側に出す、外部のアプリを開くボタン */
-  appLink?: { label: string; url: string; icon?: string };
+  /** 右側に出す、外部のアプリを開くボタン(icons は、使いたい順のアイコンの URL) */
+  appLink?: { label: string; url: string; icons: readonly string[] };
 }
 
 /** 共通ヘッダー。各機能の画面には、必ずホームへ戻るボタンが付く。 */

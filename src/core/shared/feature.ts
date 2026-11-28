@@ -94,6 +94,11 @@ export function featureSettingsPath(id: string): string {
   return `/${id}${FEATURE_SETTINGS_SUBPATH}`;
 }
 
+/** 画面の上の、外部のアプリを開くボタン(headerLink)のアイコンの ID(設定の「アイコン」で登録する) */
+export function headerLinkIconId(featureId: string): string {
+  return `${featureId}-link`;
+}
+
 /** 宣言の誤りを、メッセージの配列で返す(空なら問題なし)。 */
 export function validateFeatures(features: readonly FeatureMeta[]): string[] {
   const errors: string[] = [];
